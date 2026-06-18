@@ -1,6 +1,6 @@
 <h1 align="center" style="font-size: 80px;">🎮 🍴 RSX3MAC 🍴 🎮</h1>
 
-## **Updated Technical Summary (Accurate to Our Current Findings)** 
+## **Fork Technical Summary** 
 
 ## **The Core Problem: Render‑Target Lifetime Instability Under ZCULL Pressure** 
 
