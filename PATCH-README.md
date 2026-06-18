@@ -56,18 +56,14 @@ These failures are not random; they are the natural outcome of invalid surfaces 
 
 ## **Current Direction of the Fix** 
 
-This fork introduces a **surface‑integrity validation layer** around the RSX → Vulkan boundary. The goal is to ensure that only well‑formed, fully valid render 
+This fork introduces a **surface‑integrity validation layer** around the RSX → Vulkan boundary. The goal is to ensure that only well‑formed, fully valid render targets enter the Vulkan pipeline.
 
-targets enter the Vulkan pipeline. This includes: 
+This includes: 
 
 - null‑pointer guards 
-
 - memory‑range validation 
-
 - orphaned/superseded surface gating 
-
 - depth/color RTT sanity checks 
-
 - framebuffer attachment validation 
 
 This does not change rendering behavior for valid surfaces. It simply prevents invalid ones from propagating into MoltenVK, where they cause flicker or crashes. 
