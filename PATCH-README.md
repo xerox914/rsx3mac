@@ -1,6 +1,6 @@
 ## **Updated Technical Summary (Accurate to Our Current Findings)** 
 
-## ** The Core Problem: Render‑Target Lifetime Instability Under ZCULL Pressure** 
+## **The Core Problem: Render‑Target Lifetime Instability Under ZCULL Pressure** 
 
 Certain PS3 titles place unusually heavy stress on the RSX render‑target system, especially during depth‑related operations such as ZCULL (depth culling). These games rapidly invalidate, recycle, and rebind render targets mid‑frame, often in tight synchronization loops that expect strict ordering between GPU and CPU operations. 
 
