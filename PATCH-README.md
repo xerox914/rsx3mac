@@ -70,3 +70,5 @@ This does not change rendering behavior for valid surfaces. It simply prevents i
 
 As development continues, this validation layer will expand into a more complete integrity system that stabilizes depth‑related rendering across titles that stress the RSX pipeline in similar ways. 
 
+#🍴🎮
+
