@@ -1,3 +1,4 @@
+<h1 align="center" style="font-size: 80px;">🎮 🍴 RSX3MAC 🍴 🎮</h1>
 ## **Updated Technical Summary (Accurate to Our Current Findings)** 
 
 ## **The Core Problem: Render‑Target Lifetime Instability Under ZCULL Pressure** 
@@ -69,6 +70,3 @@ This includes:
 This does not change rendering behavior for valid surfaces. It simply prevents invalid ones from propagating into MoltenVK, where they cause flicker or crashes. 
 
 As development continues, this validation layer will expand into a more complete integrity system that stabilizes depth‑related rendering across titles that stress the RSX pipeline in similar ways. 
-
-#🍴🎮
-<h1 align="center" style="font-size: 80px;">🎮 🍴 RSX3MAC 🍴 🎮</h1>
