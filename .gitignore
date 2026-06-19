@@ -56,9 +56,10 @@
 /bin/GuiConfigs/*.dat
 /bin/GuiConfigs/*.dat.*
 
-# Visual Studio Files
+# Visual Studio Files & VS Code / VSCodium
 .vs/*
 .vscode/*
+!.vscode/extensions.json
 *.ipch
 *.vspx
 *.psess
@@ -68,6 +69,7 @@ enc_temp_folder/*
 CMakeSettings.json
 *PVS-Studio*
 PVS/*
+.history/
 
 # Zed Editor files
 .zed/*
@@ -111,18 +113,29 @@ CMakeLists.txt.user
 *.sublime-project
 *.sublime-workspace
 
-# CLion
+# CLion / IntelliJ
 /.idea/*
 /cmake-build-*/
 
-# macOS
+# macOS Clutter
 .DS_Store
+.DS_Store?
+._*
+
+# Xcode local settings and user state
+**/xcuserdata/
+**/*.xcuserstate
+**/DerivedData/
+.analytics
+*.workspace
+
+# C++ / Clang / Build caches
+.clangd/
+.cache/
+.lldbinit
 
 # yaml-cpp
 yaml-cpp.pc
 
 _ReSharper.*/
 CMakeUserPresets.json
-
-.cache/
-.lldbinit
