@@ -976,7 +976,7 @@ namespace vk
 	cached_texture_section* texture_cache::create_new_texture(vk::command_buffer& cmd, const utils::address_range32& rsx_range, u16 width, u16 height, u16 depth, u16 mipmaps, u32 pitch,
 		u32 gcm_format, rsx::texture_upload_context context, rsx::texture_dimension_extended type, bool swizzled, rsx::component_order swizzle_flags, rsx::flags32_t flags)
 	{
-		LOG_NOTICE(RSX, "[TC|CREATE]");
+		rsx_log.notice("[TC|CREATE]");
 		
 		const auto section_depth = depth;
 
@@ -1020,7 +1020,7 @@ namespace vk
 		vk::viewable_image* image = nullptr;
 		if (region.exists())
 		{
-			LOG_NOTICE(RSX, "[TC|REUSE]");
+			rsx_log.notice("[TC|REUSE]");
 
 			image = dynamic_cast<vk::viewable_image*>(region.get_raw_texture());
 			bool reusable = true;
@@ -1123,7 +1123,7 @@ namespace vk
 					create_format.viewFormatCount = mutable_format_list.size();
 				}
 				
-				LOG_NOTICE(RSX, "[TC|ALLOC]");
+				rsx_log.notice("[TC|ALLOC]");
 				
 				image = new vk::viewable_image(*m_device,
 					m_memory_types.device_local, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,

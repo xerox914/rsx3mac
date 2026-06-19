@@ -122,7 +122,7 @@ namespace vk
 
 void VKGSRender::begin_render_pass()
 {
-	LOG_NOTICE(RSX, "[RP|BEGIN]");
+	rsx_log.notice("[RP|BEGIN]");
 
 	vk::begin_renderpass(
 		*m_current_command_buffer,
@@ -133,7 +133,7 @@ void VKGSRender::begin_render_pass()
 
 void VKGSRender::close_render_pass()
 {
-	LOG_NOTICE(RSX, "[RP|END]");
+	rsx_log.notice("[RP|END]");
 
 	vk::end_renderpass(*m_current_command_buffer);
 }
