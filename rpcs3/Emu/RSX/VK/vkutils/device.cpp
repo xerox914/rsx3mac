@@ -240,7 +240,7 @@ namespace vk
 		get_physical_device_properties_1(allow_extensions);
 
 		rsx_log.always()("Found Vulkan-compatible GPU: '%s' running on driver %s", get_name(), get_driver_version());
-        zcull_log.always()("=-=-=-=-=-=- ZCULL version: >> [ IS THERE LIFE ON MARS ? ] << -=-=-=-=-=-=-=");
+        zcull_log.always()("=-=-=-=-=-=- ZCULL version: >> [ SPROCKETS NOW WE DANCE !! ] << -=-=-=-=-=-=-=");
 
 		if (get_driver_vendor() == driver_vendor::RADV && get_name().find("LLVM 8.0.0") != umax)
 		{

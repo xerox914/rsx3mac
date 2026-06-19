@@ -1010,6 +1010,8 @@ void VKGSRender::on_semaphore_acquire_wait()
 
 bool VKGSRender::on_vram_exhausted(rsx::problem_severity severity)
 {
+	LOG_NOTICE(RSX, "[VRAM|EXHAUST]");
+
 	ensure(!vk::is_uninterruptible() && rsx::get_current_renderer()->is_current_thread());
 
 	bool texture_cache_relieved = false;
@@ -1129,6 +1131,8 @@ void VKGSRender::on_descriptor_pool_fragmentation(bool is_fatal)
 
 void VKGSRender::notify_tile_unbound(u32 tile)
 {
+	LOG_NOTICE(RSX, "[TILE|UNBOUND]");
+
 	// TODO: Handle texture writeback
 	if (false)
 	{
@@ -1145,6 +1149,8 @@ void VKGSRender::notify_tile_unbound(u32 tile)
 
 void VKGSRender::check_present_status()
 {
+	LOG_NOTICE(RSX, "[PRESENT|CHECK]");
+
 	while (!m_queued_frames.empty())
 	{
 		auto ctx = m_queued_frames.front();
@@ -1159,6 +1165,8 @@ void VKGSRender::check_present_status()
 
 void VKGSRender::set_viewport()
 {
+	LOG_NOTICE(RSX, "[VP|SET]");
+
 	const auto [clip_width, clip_height] = rsx::apply_resolution_scale<true>(
 		resolution_scaling_config,
 		rsx::method_registers.surface_clip_width(), rsx::method_registers.surface_clip_height());
@@ -1189,6 +1197,8 @@ void VKGSRender::set_viewport()
 
 void VKGSRender::set_scissor(bool clip_viewport)
 {
+	LOG_NOTICE(RSX, "[SCISSOR|SET]");
+
 	areau scissor;
 	if (get_scissor(scissor, clip_viewport))
 	{
@@ -1203,6 +1213,8 @@ void VKGSRender::set_scissor(bool clip_viewport)
 
 void VKGSRender::bind_viewport()
 {
+	LOG_NOTICE(RSX, "[VP|BIND]");
+
 	if (m_graphics_state & rsx::pipeline_state::zclip_config_state_dirty)
 	{
 		if (m_device->get_unrestricted_depth_range_support())
@@ -1220,6 +1232,8 @@ void VKGSRender::bind_viewport()
 
 void VKGSRender::on_init_thread()
 {
+	LOG_NOTICE(RSX, "[RSX|INIT]");
+
 	if (m_device == VK_NULL_HANDLE)
 	{
 		fmt::throw_exception("No Vulkan device was created");
@@ -1256,6 +1270,8 @@ void VKGSRender::on_init_thread()
 
 void VKGSRender::on_exit()
 {
+	LOG_NOTICE(RSX, "[RSX|EXIT]");
+
 	GSRender::on_exit();
 	vk::destroy_pipe_compiler(); // Ensure no pending shaders being compiled
 	zcull_ctrl.release();
@@ -1263,6 +1279,8 @@ void VKGSRender::on_exit()
 
 void VKGSRender::clear_surface(u32 mask)
 {
+	LOG_NOTICE(RSX, "[RT|CLEAR]");
+
 	if (skip_current_frame || swapchain_unavailable)
 		return;
 
@@ -1545,6 +1563,8 @@ void VKGSRender::clear_surface(u32 mask)
 
 void VKGSRender::flush_command_queue(bool hard_sync, bool do_not_switch)
 {
+	LOG_NOTICE(RSX, "[CB|FLUSH]");
+
 	close_and_submit_command_buffer();
 
 	if (hard_sync)
@@ -1662,6 +1682,8 @@ bool VKGSRender::release_GCM_label(u32 type, u32 address, u32 args)
 
 void VKGSRender::on_guest_texture_read(const vk::command_buffer& cmd)
 {
+	LOG_NOTICE(RSX, "[TEX|READ]");
+
 	if (!backend_config.supports_host_gpu_labels)
 	{
 		return;
@@ -1675,12 +1697,16 @@ void VKGSRender::on_guest_texture_read(const vk::command_buffer& cmd)
 
 void VKGSRender::write_barrier(u32 address, u32 range)
 {
+	LOG_NOTICE(RSX, "[SYNC|WB]");
+
 	ensure(is_current_thread());
 	m_rtts.invalidate_range(utils::address_range32::start_length(address, range));
 }
 
 void VKGSRender::sync_hint(rsx::FIFO::interrupt_hint hint, rsx::reports::sync_hint_payload_t payload)
 {
+	LOG_NOTICE(RSX, "[SYNC|HINT]");
+
 	rsx::thread::sync_hint(hint, payload);
 
 	if (!(m_current_command_buffer->flags & vk::command_buffer::cb_has_occlusion_task))
@@ -2488,6 +2514,8 @@ void VKGSRender::close_and_submit_command_buffer(vk::fence* pFence, VkSemaphore 
 __attribute__((noinline))
 void VKGSRender::prepare_rtts(rsx::framebuffer_creation_context context)
 {
+	LOG_NOTICE(RSX, "[RTT|PREP]");
+
 	rsx_log.error(
 		"[FB DEBUG] prepare_rtts: ctx=%d layout_valid=%d draw_fbo=%p rtt_dirty=%d",
 		static_cast<int>(context),
@@ -2916,6 +2944,8 @@ bool VKGSRender::scaled_image_from_memory(const rsx::blit_src_info& src, const r
 
 void VKGSRender::begin_occlusion_query(rsx::reports::occlusion_query_info* query)
 {
+	LOG_NOTICE(RSX, "[ZQ|BEGIN]");
+
 	ensure(!m_occlusion_query_active);
 
 	// TS3: force previous work to be submitted before starting a new occlusion query
@@ -2936,6 +2966,8 @@ void VKGSRender::begin_occlusion_query(rsx::reports::occlusion_query_info* query
 
 void VKGSRender::end_occlusion_query(rsx::reports::occlusion_query_info* query)
 {
+	LOG_NOTICE(RSX, "[ZQ|END]");
+
 	ensure(query == m_active_query_info);
 
 	// NOTE: flushing the queue is very expensive, do not flush just because query stopped
@@ -2980,6 +3012,8 @@ bool VKGSRender::check_occlusion_query_status(rsx::reports::occlusion_query_info
 
 void VKGSRender::get_occlusion_query_result(rsx::reports::occlusion_query_info* query)
 {
+	LOG_NOTICE(RSX, "[ZQ|RESULT]");
+
 	auto& data = m_occlusion_map[query->driver_handle];
 	if (data.indices.empty())
 		return;
@@ -3038,6 +3072,8 @@ void VKGSRender::emergency_query_cleanup(vk::command_buffer* commands)
 
 void VKGSRender::begin_conditional_rendering(const std::vector<rsx::reports::occlusion_query_info*>& sources)
 {
+	LOG_NOTICE(RSX, "[COND|BEGIN]");
+
 	rsx_log.error(
 		"[FB DEBUG] begin_conditional_rendering: sources=%zu first.pending=%d",
 		sources.size(),
@@ -3244,5 +3280,7 @@ void VKGSRender::begin_conditional_rendering(const std::vector<rsx::reports::occ
 
 void VKGSRender::end_conditional_rendering()
 {
+	LOG_NOTICE(RSX, "[COND|END]");
+
 	thread::end_conditional_rendering();
 }
