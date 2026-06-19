@@ -100,6 +100,16 @@ if (NOT ANDROID)
     # Build rpcs3 executable
     add_executable(rpcs3 WIN32 MACOSX_BUNDLE)
 
+    # Make DEBUG dSym :: always make debug version :: !!
+    add_custom_command(
+    TARGET rpcs3
+    POST_BUILD
+    COMMAND /usr/bin/dsymutil "$<TARGET_FILE:rpcs3>" -o "$<TARGET_FILE:rpcs3>.dSYM"
+    COMMENT "Generating dSYM for rpcs3"
+    VERBATIM
+    )
+
+
     # MacOS ZCULL FIX Build :: Disable OpenGL backend (required for macOS ARM64)
     target_compile_definitions(rpcs3_lib PRIVATE WITHOUT_OPENGL)
     target_compile_definitions(rpcs3 PRIVATE WITHOUT_OPENGL)

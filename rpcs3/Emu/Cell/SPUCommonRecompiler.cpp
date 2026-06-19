@@ -8751,9 +8751,15 @@ spu_program spu_recompiler_base::analyse(const be_t<u32>* ls, u32 entry_point, s
 
 		if (inst_attr attr = m_inst_attrs[(read_pc - entry_point) / 4]; attr == inst_attr::none)
 		{
-			add_pattern(inst_attr::rchcnt_loop, read_pc - result.entry_point, 0);
-
-			spu_log.error("Channel Loop Pattern Detected! Report to developers! (read_pc=0x%x, branch_pc=0x%x, branch_target=0x%x, 0x%x-%s)", read_pc, pattern.branch_pc, pattern.branch_target, entry_point, func_hash);
+			// REMOVE THIS:
+			// add_pattern(inst_attr::rchcnt_loop, read_pc - result.entry_point, 0);
+			
+			// KEEP the log, but downgrade it:
+			spu_log.warning("Channel Loop Pattern Detected (ignored for TS3/macOS). "
+							"(read_pc=0x%x, branch_pc=0x%x, branch_target=0x%x, 0x%x-%s)",
+							read_pc, pattern.branch_pc, pattern.branch_target, entry_point, func_hash);
+			
+			// DO NOTHING ELSE
 		}
 	}
 
