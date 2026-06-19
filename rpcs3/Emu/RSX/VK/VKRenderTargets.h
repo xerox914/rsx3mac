@@ -126,12 +126,20 @@ namespace vk
 
 	static inline vk::render_target* as_rtt(vk::image* t)
 	{
-		return ensure(dynamic_cast<vk::render_target*>(t));
+		rsx_log.error("[FB DEBUG] as_rtt: t=%p", static_cast<void*>(t));
+		auto* rtt = dynamic_cast<vk::render_target*>(t);
+		rsx_log.error("[FB DEBUG] as_rtt: rtt=%p", static_cast<void*>(rtt));
+		
+		return ensure(rtt);
 	}
 
 	static inline const vk::render_target* as_rtt(const vk::image* t)
 	{
-		return ensure(dynamic_cast<const vk::render_target*>(t));
+		rsx_log.error("[FB DEBUG] as_rtt(const): t=%p", static_cast<const void*>(t));
+		auto* rtt = dynamic_cast<const vk::render_target*>(t);
+		rsx_log.error("[FB DEBUG] as_rtt(const): rtt=%p", static_cast<const void*>(rtt));
+
+		return ensure(rtt);
 	}
 
 	struct surface_cache_traits
@@ -143,6 +151,15 @@ namespace vk
 		using command_list_type = vk::command_buffer&;
 		using download_buffer_object = void*;
 		using barrier_descriptor_t = rsx::deferred_clipped_region<vk::render_target*>;
+		
+		// Wrap a raw vk::render_target* into the backend's storage type.
+		// surface_store is backend‑agnostic, so Vulkan provides this helper
+		// to convert surface_type → surface_storage_type (unique_ptr).
+		static surface_storage_type store(surface_type s)
+		{
+			return surface_storage_type(s);
+		}
+
 
 		static std::pair<VkImageUsageFlags, VkImageCreateFlags> get_attachment_create_flags(VkFormat format, [[maybe_unused]] u8 samples)
 		{

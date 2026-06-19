@@ -20,6 +20,9 @@ add_library(rpcs3_emu STATIC
     IPC_config.cpp
     IPC_socket.cpp
 )
+# ToyStory 3 :: Disable OpenGL backend (required for macOS ARM64)
+target_compile_definitions(rpcs3_emu PRIVATE WITHOUT_OPENGL)
+
 
 if(USE_LTO)
     set_target_properties(rpcs3_emu PROPERTIES INTERPROCEDURAL_OPTIMIZATION ON)
@@ -669,10 +672,10 @@ target_link_libraries(rpcs3_emu
         3rdparty::asmjit
         3rdparty::ffmpeg
         3rdparty::sdl3
-        3rdparty::opengl
+        ## MACOS REMOVE OpenGL --> 3rdparty::opengl
         3rdparty::stblib
         3rdparty::vulkan
-        3rdparty::glew
+        ## MACOS REMOVE OpenGL --> 3rdparty::glew
         3rdparty::libusb
         3rdparty::wolfssl
         3rdparty::openal

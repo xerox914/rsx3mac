@@ -203,3 +203,4 @@ namespace logs
 	namespace logs { inline ::logs::registerer reg_##ch{ch}; }
 
 LOG_CHANNEL(rsx_log, "RSX");
+LOG_CHANNEL(zcull_log, "ZCULL"); // JNS TS3

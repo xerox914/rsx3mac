@@ -4,6 +4,7 @@
 
 #include "Emu/RSX/RSXThread.h"
 #include "Emu/RSX/Common/BufferUtils.h"
+#include "Emu/RSX/zcull_tracer.h"
 
 #define RSX(ctx) ctx->rsxthr
 #define REGS(ctx) (&rsx::method_registers)
@@ -491,12 +492,32 @@ namespace rsx
 			}
 		}
 
-		void clear(context* ctx, u32 /*reg*/, u32 arg)
-		{
-			RSX(ctx)->clear_surface(arg);
+	void clear(context* ctx, u32 /*reg*/, u32 arg)
+	{
+		// RSX valid clear bits:
+		// 0x1 = color
+		// 0x2 = alpha
+		// 0x4 = depth
+		// 0x8 = stencil
+		constexpr u32 VALID_CLEAR_MASK = 0xF;
 
-			RSX_CAPTURE_EVENT("clear");
+		// If the game sets any bits outside the valid mask, real RSX ignores the clear.
+		// turns all bogus clears into no‑ops just like real hardware
+		if (arg & ~VALID_CLEAR_MASK)
+		{
+			ZCULL_TRACE("[ZCULL_RSX] clear_surface INVALID arg=0x%X (ignored)", arg);
+			return;
 		}
+
+		RSX(ctx)->clear_surface(arg);
+
+		RSX_CAPTURE_EVENT("clear");
+
+		zcull_tracer::RecordInvalidate();
+		ZCULL_TRACE("[ZCULL_RSX] clear_surface arg=0x%X", arg);
+		zcull_tracer::g_last_clear_arg = arg;
+	}
+
 
 		void clear_zcull(context* ctx, u32 /*reg*/, u32 /*arg*/)
 		{

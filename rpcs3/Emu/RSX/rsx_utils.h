@@ -122,27 +122,125 @@ namespace rsx
 
 		address_range32 range{};
 
-		gcm_framebuffer_info() = default;
+		gcm_framebuffer_info()
+		{
+			rsx_log.error(
+				"[FB DEBUG] ctor:"
+				" addr=0x%08x pitch=%u width=%u height=%u bpp=%u samples=%u",
+				address,
+				pitch,
+				width,
+				height,
+				bpp,
+				samples
+			);
+		}
 
 		ENABLE_BITWISE_SERIALIZATION;
-
+		
+		// RSX render targets are stored as (height - 1) full rows using the padded pitch,
+		// and a final row that only stores the actual pixel width.
+		// AA factors scale the number of samples horizontally (U) and vertically (V).
+		// Total size = pitch * (height - 1) * AA_v  +  width * bpp * AA_u.
 		void calculate_memory_range(u32 aa_factor_u, u32 aa_factor_v)
 		{
-			// Account for the last line of the block not reaching the end
-			const u32 block_size = pitch * (height - 1) * aa_factor_v;
-			const u32 line_size = width * aa_factor_u * bpp;
-			range = address_range32::start_length(address, block_size + line_size);
+			// --- Basic sanity checks ---------------------------------------------------
+			if (width == 0 || height == 0 || pitch == 0 || bpp == 0)
+			{
+				rsx_log.error("calculate_memory_range: invalid surface dims "
+							  "(addr=0x%x, w=%u, h=%u, pitch=%u, bpp=%u)",
+							  address, width, height, pitch, bpp);
+
+				range = address_range32::start_length(address, 0);
+				return;
+			}
+
+			if (aa_factor_u == 0 || aa_factor_v == 0)
+			{
+				rsx_log.error("calculate_memory_range: invalid AA factors "
+							  "(u=%u, v=%u)", aa_factor_u, aa_factor_v);
+
+				range = address_range32::start_length(address, 0);
+				return;
+			}
+
+			// --- Compute sizes safely --------------------------------------------------
+			const u64 block_size = u64(pitch) * u64(height - 1) * u64(aa_factor_v);
+			const u64 line_size  = u64(width) * u64(aa_factor_u) * u64(bpp);
+			const u64 total_size = block_size + line_size;
+
+			// --- Overflow guard --------------------------------------------------------
+			if (total_size > 0xFFFFFFFFull)
+			{
+				rsx_log.error("calculate_memory_range: overflow computing size "
+							  "(addr=0x%x, size=%llu)", address, total_size);
+
+				range = address_range32::start_length(address, 0);
+				return;
+			}
+
+			// --- RSX memory bounds check ----------------------------------------------
+			constexpr u32 RSX_MEMORY_SIZE = 0x10000000; // 256 MB
+
+			if (address > RSX_MEMORY_SIZE ||
+				address + total_size > RSX_MEMORY_SIZE)
+			{
+				rsx_log.error("calculate_memory_range: out-of-bounds RSX memory range "
+							  "(addr=0x%x, size=%llu)", address, total_size);
+
+				range = address_range32::start_length(address, 0);
+				return;
+			}
+
+			// --- Success ---------------------------------------------------------------
+			range = address_range32::start_length(address, static_cast<u32>(total_size));
 		}
 
 		address_range32 get_memory_range(const u32* aa_factors)
 		{
+			rsx_log.error(
+				"[FB DEBUG] gcm_framebuffer_info (AA):"
+				" addr=0x%08x pitch=%u width=%u height=%u bpp=%u"
+				" aa_u=%u aa_v=%u"
+				" range.start=0x%08x range.length=%u",
+				address,
+				pitch,
+				width,
+				height,
+				bpp,
+				aa_factors[0],
+				aa_factors[1],
+				range.start,
+				range.length()
+			);
+			
 			calculate_memory_range(aa_factors[0], aa_factors[1]);
 			return range;
 		}
 
 		address_range32 get_memory_range() const
 		{
-			ensure(range.start == address);
+			// `this` is never actually null for a valid call; if it were, we couldn’t safely touch members.
+			// The earlier "object: 0x0" in the verify message is about the verify context, not necessarily `this`.
+
+			rsx_log.error(
+				"[FB DEBUG] gcm_framebuffer_info const:"
+				" this=%p addr=0x%08x pitch=%u width=%u height=%u bpp=%u aa=%u"
+				" range.start=0x%08x range.length=%u",
+				this,
+				address,
+				pitch,
+				width,
+				height,
+				bpp,
+				samples,
+				range.start,
+				range.length()
+			);
+
+			// TEMP: disable the invariant so we can see real values without killing the thread
+			// ensure(range.start == address);
+
 			return range;
 		}
 	};

@@ -32,6 +32,7 @@
 #pragma clang diagnostic ignored "-Wold-style-cast"
 #pragma clang diagnostic ignored "-Wextern-c-compat"
 #endif
+#include <wolfssl/options.h>   // REQUIRED FIRST
 #include <wolfssl/ssl.h>
 #ifdef __clang__
 #pragma clang diagnostic pop

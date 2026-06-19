@@ -28,6 +28,13 @@ namespace vk
 
 	vk::framebuffer_holder* get_framebuffer(VkDevice dev, u16 width, u16 height, VkBool32 has_input_attachments, VkRenderPass renderpass, const std::vector<vk::image*>& image_list)
 	{
+		// --- SAFETY GUARD: empty attachment list --------------------------------
+		if (image_list.empty())
+		{
+			rsx_log.error("get_framebuffer: image_list is empty (width=%u, height=%u)", width, height);
+			return nullptr;
+		}
+
 		framebuffer_storage_key key(width, height, has_input_attachments);
 		auto& queue = g_framebuffers_cache[key.encoded];
 
@@ -44,8 +51,23 @@ namespace vk
 
 		for (const auto& e : image_list)
 		{
-			const VkImageSubresourceRange subres = { e->aspect(), 0, 1, 0, 1 };
-			image_views.push_back(std::make_unique<vk::image_view>(dev, e, e->format(), VK_IMAGE_VIEW_TYPE_2D, vk::default_component_map, subres));
+			// --- SAFETY GUARD: null pointer -------------------------------------
+			if (!e)
+			{
+				rsx_log.error("get_framebuffer: NULL image in attachment list (width=%u, height=%u)", width, height);
+				return nullptr;
+			}
+
+			const auto aspect = e->aspect();
+			if (!aspect)
+			{
+				rsx_log.error("get_framebuffer: image has invalid aspect mask (format=%u)", static_cast<u32>(e->format()));
+				return nullptr;
+			}
+
+			const VkImageSubresourceRange subres{ aspect, 0, 1, 0, 1 };
+			image_views.push_back(std::make_unique<vk::image_view>(
+				dev, e, e->format(), VK_IMAGE_VIEW_TYPE_2D, vk::default_component_map, subres));
 		}
 
 		auto value = std::make_unique<vk::framebuffer_holder>(dev, renderpass, width, height, std::move(image_views));

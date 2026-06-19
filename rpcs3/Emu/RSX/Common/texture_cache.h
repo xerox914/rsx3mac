@@ -1348,7 +1348,18 @@ namespace rsx
 		void lock_memory_region(commandbuffer_type& cmd, image_storage_type* image, const address_range32 &rsx_range, bool is_active_surface, u16 width, u16 height, u32 pitch, Args&&... extras)
 		{
 			AUDIT(g_cfg.video.write_color_buffers || g_cfg.video.write_depth_buffer); // this method is only called when either WCB or WDB are enabled
-
+            
+			rsx_log.error(
+				"[FB DEBUG] lock_memory_region: image=%p rsx=[0x%08x,0x%08x) active=%d w=%u h=%u pitch=%u",
+				static_cast<void*>(image),
+				rsx_range.start,
+				rsx_range.end,
+				is_active_surface ? 1 : 0,
+				width,
+				height,
+				pitch
+			);
+			
 			std::lock_guard lock(m_cache_mutex);
 
 			// Find a cached section to use

@@ -19,14 +19,14 @@ namespace rsx
 		u8 get_mrt_buffers_count(surface_target color_target);
 		usz get_aligned_pitch(surface_color_format format, u32 width);
 		usz get_packed_pitch(surface_color_format format, u32 width);
-	}
+	} // namespace utility
 
 	template <typename Traits>
 	struct surface_store
 	{
 		static constexpr u32 get_aa_factor_u(surface_antialiasing aa_mode)
 		{
-			return (aa_mode == surface_antialiasing::center_1_sample)? 1 : 2;
+			return (aa_mode == surface_antialiasing::center_1_sample) ? 1 : 2;
 		}
 
 		static constexpr u32 get_aa_factor_v(surface_antialiasing aa_mode)
@@ -90,9 +90,9 @@ namespace rsx
 		void split_surface_region(command_list_type cmd, u32 address, surface_type prev_surface, u16 width, u16 height, u8 bpp, rsx::surface_antialiasing aa)
 		{
 			auto insert_new_surface = [&](
-				u32 new_address,
-				deferred_clipped_region<surface_type>& region,
-				surface_ranged_map& data)
+										  u32 new_address,
+										  deferred_clipped_region<surface_type>& region,
+										  surface_ranged_map& data)
 			{
 				surface_storage_type sink;
 				surface_type invalidated = 0;
@@ -115,7 +115,7 @@ namespace rsx
 						invalidate(found->second);
 						data.erase(new_address);
 
-						auto &old = invalidated_resources.back();
+						auto& old = invalidated_resources.back();
 						if (Traits::surface_is_pitch_compatible(old, prev_surface->get_rsx_pitch()))
 						{
 							if (old->last_use_tag >= prev_surface->last_use_tag) [[unlikely]]
@@ -157,7 +157,7 @@ namespace rsx
 				}
 
 				ensure(region.target == Traits::get(sink));
-				orphaned_surfaces.push_back({ address, region.target });
+				orphaned_surfaces.push_back({address, region.target});
 				data.emplace(region.target->get_memory_range(), std::move(sink));
 			};
 
@@ -263,11 +263,13 @@ namespace rsx
 					// Memory partition check
 					if (mem_range.start >= constants::local_mem_base)
 					{
-						if (it->first < constants::local_mem_base) continue;
+						if (it->first < constants::local_mem_base)
+							continue;
 					}
 					else
 					{
-						if (it->first >= constants::local_mem_base) continue;
+						if (it->first >= constants::local_mem_base)
+							continue;
 					}
 
 					// Pitch check
@@ -283,7 +285,7 @@ namespace rsx
 						continue;
 					}
 
-					result.push_back({ it->first, surface });
+					result.push_back({it->first, surface});
 					ensure(it->first == surface->base_addr);
 				}
 
@@ -299,11 +301,11 @@ namespace rsx
 				// Append the previous removed surface to the intersection list
 				if constexpr (is_depth_surface)
 				{
-					list2.push_back({ address, prev_surface });
+					list2.push_back({address, prev_surface});
 				}
 				else
 				{
-					list1.push_back({ address, prev_surface });
+					list1.push_back({address, prev_surface});
 				}
 			}
 			else
@@ -329,10 +331,11 @@ namespace rsx
 				surface_info = std::move(list1);
 				surface_info.reserve(reserve);
 
-				for (const auto& e : list2) surface_info.push_back(e);
+				for (const auto& e : list2)
+					surface_info.push_back(e);
 			}
 
-			for (const auto &e: surface_info)
+			for (const auto& e : surface_info)
 			{
 				auto this_address = e.first;
 				auto surface = e.second;
@@ -361,7 +364,8 @@ namespace rsx
 						}
 					}
 
-					if (ignore) continue;
+					if (ignore)
+						continue;
 
 					this_address = surface->base_addr;
 					ensure(this_address);
@@ -390,7 +394,7 @@ namespace rsx
 			}
 		}
 
-		template <bool depth, typename format_type, typename ...Args>
+		template <bool depth, typename format_type, typename... Args>
 		surface_type bind_surface_address(
 			command_list_type command_list,
 			u32 address,
@@ -495,7 +499,7 @@ namespace rsx
 				// Search invalidated resources for a suitable surface
 				for (auto It = invalidated_resources.begin(); It != invalidated_resources.end(); It++)
 				{
-					auto &surface = *It;
+					auto& surface = *It;
 					if (Traits::surface_matches_properties(surface, format, width, height, antialias, scaling_config, true))
 					{
 						new_surface_storage = std::move(surface);
@@ -721,7 +725,7 @@ namespace rsx
 				while (length >= 8)
 				{
 					const u64 value = read_from_ptr<u64>(dst_ptr);
-					const u64 block_mask = ~value;              // If the value is not all 1s, set valid to true
+					const u64 block_mask = ~value; // If the value is not all 1s, set valid to true
 					mask |= block_mask;
 					write_to_ptr<u64>(dst_ptr, umax);
 
@@ -832,11 +836,11 @@ namespace rsx
 
 	protected:
 		/**
-		* If render target already exists at address, issue state change operation on cmdList.
-		* Otherwise create one with width, height, clearColor info.
-		* returns the corresponding render target resource.
-		*/
-		template <typename ...Args>
+		 * If render target already exists at address, issue state change operation on cmdList.
+		 * Otherwise create one with width, height, clearColor info.
+		 * returns the corresponding render target resource.
+		 */
+		template <typename... Args>
 		surface_type bind_address_as_render_targets(
 			command_list_type command_list,
 			u32 address,
@@ -853,7 +857,7 @@ namespace rsx
 				std::forward<Args>(extra_params)...);
 		}
 
-		template <typename ...Args>
+		template <typename... Args>
 		surface_type bind_address_as_depth_stencil(
 			command_list_type command_list,
 			u32 address,
@@ -863,6 +867,13 @@ namespace rsx
 			const rsx::surface_scaling_config_t& scaling_config,
 			Args&&... extra_params)
 		{
+			// RSX depth address 0 means "no depth" – never bind or alias a real surface
+			if (address == 0)
+			{
+				m_bound_depth_stencil = std::make_pair(0u, surface_type{});
+				rsx_log.notice("=-=-=-=-=-=- [DEPTH_STENCIL_GUARD] address=0 hit -=-=-=-=-=-=-=-=-=-=-=-=-=-=");
+				return nullptr;
+			}
 			return bind_surface_address<true>(
 				command_list, address, depth_format, antialias,
 				width, height, pitch,
@@ -905,7 +916,7 @@ namespace rsx
 				}
 			}
 
-			return { color_result, depth_result, result_range };
+			return {color_result, depth_result, result_range};
 		}
 
 		void write_to_dma_buffers(
@@ -915,8 +926,8 @@ namespace rsx
 			auto block_range = m_dma_block.to_block_range(range);
 			auto [color_data, depth_stencil_data] = find_overlapping_set(block_range);
 			auto [bo, offset, bo_timestamp] = m_dma_block
-				.with_range(command_list, block_range)
-				.get(block_range.start);
+			                                      .with_range(command_list, block_range)
+			                                      .get(block_range.start);
 
 			u64 src_offset, dst_offset, write_length;
 			auto block_length = block_range.length();
@@ -927,9 +938,9 @@ namespace rsx
 			if (all_data.size() > 1)
 			{
 				std::sort(all_data.begin(), all_data.end(), [](const auto& a, const auto& b)
-				{
-					return a->last_use_tag < b->last_use_tag;
-				});
+					{
+						return a->last_use_tag < b->last_use_tag;
+					});
 			}
 
 			for (const auto& surface : all_data)
@@ -964,7 +975,7 @@ namespace rsx
 		 * Update bound color and depth surface.
 		 * Must be called everytime surface format, clip, or addresses changes.
 		 */
-		template <typename ...Args>
+		template <typename... Args>
 		void prepare_render_target(
 			command_list_type command_list,
 			surface_color_format color_format, surface_depth_format2 depth_format,
@@ -972,8 +983,8 @@ namespace rsx
 			surface_target set_surface_target,
 			surface_antialiasing antialias,
 			surface_raster_type raster_type,
-			const std::array<u32, 4> &surface_addresses, u32 address_z,
-			const std::array<u32, 4> &surface_pitch, u32 zeta_pitch,
+			const std::array<u32, 4>& surface_addresses, u32 address_z,
+			const std::array<u32, 4>& surface_pitch, u32 zeta_pitch,
 			const rsx::surface_scaling_config_t& scaling_config,
 			Args&&... extra_params)
 		{
@@ -987,7 +998,7 @@ namespace rsx
 			// Make previous RTTs sampleable
 			for (const auto& i : m_bound_render_target_ids)
 			{
-				auto &rtt = m_bound_render_targets[i];
+				auto& rtt = m_bound_render_targets[i];
 				Traits::prepare_surface_for_sampling(command_list, std::get<1>(rtt));
 				rtt = std::make_pair(0, nullptr);
 			}
@@ -997,16 +1008,56 @@ namespace rsx
 				!rtt_indices.empty()) [[likely]]
 			{
 				// Create/Reuse requested rtts
+				// Create / Reuse requested RTTs with dimension‑mismatch forgiveness
 				for (u8 surface_index : rtt_indices)
 				{
-					if (surface_addresses[surface_index] == 0)
+					const u32 addr = surface_addresses[surface_index];
+					if (addr == 0)
 						continue;
 
-					m_bound_render_targets[surface_index] = std::make_pair(surface_addresses[surface_index],
-						bind_address_as_render_targets(command_list, surface_addresses[surface_index], color_format, antialias,
-							clip_width, clip_height, surface_pitch[surface_index], scaling_config, std::forward<Args>(extra_params)...));
+					surface_type rt = nullptr;
 
-					m_bound_render_target_ids.push_back(surface_index);
+					// Check if we already have a surface for this RSX address
+					auto it = m_render_targets_storage.find(addr);
+					if (it != m_render_targets_storage.end())
+					{
+						// Existing surface found
+						auto &existing = it->second;
+						rt = Traits::get(existing);
+
+						// Query existing dimensions
+						const u32 existing_w = existing->width();
+						const u32 existing_h = existing->height();
+
+						// If the new requested size is larger, grow the surface
+						if (clip_width > existing_w || clip_height > existing_h)
+						{
+							rt = bind_address_as_render_targets(
+								command_list, addr, color_format, antialias,
+								clip_width, clip_height, surface_pitch[surface_index],
+								scaling_config, std::forward<Args>(extra_params)...);
+
+							// Update stored surface to the new (larger) one
+							existing = Traits::store(rt);
+						}
+						// If the new size is smaller, do nothing — reuse the larger surface
+					}
+					else
+					{
+						// No surface exists yet — create one
+						rt = bind_address_as_render_targets(
+															command_list, addr, color_format, antialias,
+															clip_width, clip_height, surface_pitch[surface_index],
+															scaling_config, std::forward<Args>(extra_params)...);
+						
+						// Insert into ranged_map using its emplace API
+						m_render_targets_storage.emplace(
+														 utils::address_range32::start_length(addr, 1),
+														 Traits::store(rt));
+						// Bind the surface
+						m_bound_render_targets[surface_index] = std::make_pair(addr, rt);
+						m_bound_render_target_ids.push_back(surface_index);
+					}
 				}
 			}
 
@@ -1024,7 +1075,9 @@ namespace rsx
 			}
 			else
 			{
-				m_bound_depth_stencil = std::make_pair(0, nullptr);
+				// RSX depth address 0 = no depth surface
+				m_bound_depth_stencil = std::make_pair(0u, surface_type{});
+				rsx_log.notice("=-=-=-=-=-=-[DEPTH_STENCIL_ZERO] rsx_addr=0 → unbind depth -=-=-=-=-=-=-=-=-=-=-=-=-=-=");
 			}
 		}
 
@@ -1105,7 +1158,7 @@ namespace rsx
 			if (surface_internal_pitch > required_pitch) [[unlikely]]
 			{
 				rsx_log.warning("Invalid 2D region descriptor. w=%d, h=%d, bpp=%d, pitch=%d",
-							required_width, required_height, required_bpp, required_pitch);
+					required_width, required_height, required_bpp, required_pitch);
 				return {};
 			}
 
@@ -1225,18 +1278,18 @@ namespace rsx
 
 			if (result.size() > 1)
 			{
-				result.sort([](const auto &a, const auto &b)
-				{
-					if (a.surface->last_use_tag == b.surface->last_use_tag)
+				result.sort([](const auto& a, const auto& b)
 					{
-						const auto area_a = a.dst_area.width * a.dst_area.height;
-						const auto area_b = b.dst_area.width * b.dst_area.height;
+						if (a.surface->last_use_tag == b.surface->last_use_tag)
+						{
+							const auto area_a = a.dst_area.width * a.dst_area.height;
+							const auto area_b = b.dst_area.width * b.dst_area.height;
 
-						return area_a < area_b;
-					}
+							return area_a < area_b;
+						}
 
-					return a.surface->last_use_tag < b.surface->last_use_tag;
-				});
+						return a.surface->last_use_tag < b.surface->last_use_tag;
+					});
 			}
 
 			return result;
@@ -1273,7 +1326,7 @@ namespace rsx
 				if (color_mrt_writes_enabled[i])
 				{
 					auto surface = m_bound_render_targets[i].second;
-					if (surface->last_use_tag > cache_tag) [[ likely ]]
+					if (surface->last_use_tag > cache_tag) [[likely]]
 					{
 						surface->on_write_fast(write_tag);
 					}
@@ -1287,7 +1340,7 @@ namespace rsx
 			if (auto zsurface = m_bound_depth_stencil.second;
 				zsurface && depth_stencil_writes_enabled)
 			{
-				if (zsurface->last_use_tag > cache_tag) [[ likely ]]
+				if (zsurface->last_use_tag > cache_tag) [[likely]]
 				{
 					zsurface->on_write_fast(write_tag);
 				}
@@ -1301,7 +1354,7 @@ namespace rsx
 		void invalidate_all()
 		{
 			// Unbind and invalidate all resources
-			auto free_resource_list = [&](auto &data, const utils::address_range32& range)
+			auto free_resource_list = [&](auto& data, const utils::address_range32& range)
 			{
 				for (auto it = data.begin_range(range); it != data.end(); ++it)
 				{
@@ -1318,7 +1371,7 @@ namespace rsx
 
 			m_bound_depth_stencil = std::make_pair(0, nullptr);
 			m_bound_render_target_ids.clear();
-			for (auto &rtt : m_bound_render_targets)
+			for (auto& rtt : m_bound_render_targets)
 			{
 				rtt = std::make_pair(0, nullptr);
 			}
@@ -1559,10 +1612,9 @@ namespace rsx
 				ensure(rtt != m_render_targets_storage.end());
 
 				m_bound_render_targets[i] =
-				{
-					address,
-					Traits::get(rtt->second)
-				};
+					{
+						address,
+						Traits::get(rtt->second)};
 			}
 
 			if (const auto ds_address = dsv_bind_backup.first)
@@ -1571,11 +1623,10 @@ namespace rsx
 				ensure(ds != m_depth_stencil_storage.end());
 
 				m_bound_depth_stencil =
-				{
-					ds_address,
-					Traits::get(ds->second)
-				};
+					{
+						ds_address,
+						Traits::get(ds->second)};
 			}
 		}
 	};
-}
+} // namespace rsx

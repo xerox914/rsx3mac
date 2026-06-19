@@ -146,7 +146,8 @@ struct fmt_class_string
 	}
 
 	// Enum -> string function type
-	using convert_t = const char*(*)(T value);
+	using param_t   = std::remove_cv_t<std::remove_reference_t<T>>; // ZCULL FIX JNS
+    using convert_t = const char*(*)(param_t value); // ZCULL FIX JNS
 
 	// Helper function (safely converts arg to enum value)
 	static FORCE_INLINE SAFE_BUFFERS(void) format_enum(std::string& out, u64 arg, convert_t convert)

@@ -100,7 +100,7 @@ namespace gl
 	// Very useful util when capturing traces with RenderDoc
 	static inline void push_debug_label(std::string_view label)
 	{
-		if (glInsertEventMarkerEXT)
+		if (&glInsertEventMarkerEXT) // Toy Story 3 added ampersand
 		{
 			glInsertEventMarkerEXT(static_cast<GLsizei>(label.size()), label.data());
 		}

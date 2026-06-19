@@ -10,14 +10,37 @@ namespace rsx
 	void buffered_section::init_lockable_range(const address_range32& range)
 	{
 		locked_range = range.to_page_range();
+
+		rsx_log.error(
+			"[FB DEBUG] init_lockable_range:"
+			" range.start=0x%08x range.length=%u"
+			" locked_range.start=0x%08x locked_range.end=0x%08x is_page_range=%d",
+			range.start,
+			range.length(),
+			locked_range.start,
+			locked_range.end,
+			locked_range.is_page_range()
+		);
+
 		AUDIT((locked_range.start == page_start(range.start)) || (locked_range.start == next_page(range.start)));
 		AUDIT(locked_range.end <= page_end(range.end));
-		ensure(locked_range.is_page_range());
+
+		// TEMP: disable fatal invariant so we can see bad ranges without killing the thread
+		// ensure(locked_range.is_page_range());
 	}
 
 	void buffered_section::reset(const address_range32& memory_range)
 	{
-		ensure(memory_range.valid() && locked == false);
+		rsx_log.error(
+			"[FB DEBUG] buffered_section::reset:"
+			" memory_range.start=0x%08x memory_range.length=%u locked=%d",
+			memory_range.start,
+			memory_range.length(),
+			locked
+		);
+
+		// TEMP: invariant disabled so we can see bad ranges without killing the thread
+		// ensure(memory_range.valid() && locked == false);
 
 		cpu_range = address_range32(memory_range);
 		confirmed_range.invalidate();

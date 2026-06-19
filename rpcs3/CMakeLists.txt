@@ -99,6 +99,11 @@ if (NOT ANDROID)
 
     # Build rpcs3 executable
     add_executable(rpcs3 WIN32 MACOSX_BUNDLE)
+
+    # MacOS ZCULL FIX Build :: Disable OpenGL backend (required for macOS ARM64)
+    target_compile_definitions(rpcs3_lib PRIVATE WITHOUT_OPENGL)
+    target_compile_definitions(rpcs3 PRIVATE WITHOUT_OPENGL)
+
     if(WIN32)
         target_sources(rpcs3 PRIVATE rpcs3.rc)
         target_compile_definitions(rpcs3 PRIVATE UNICODE _UNICODE)

@@ -33,6 +33,8 @@
 #include <thread>
 #include <unordered_set>
 
+#include "Emu/RSX/zcull_tracer.h"
+
 class GSRender;
 
 #define CMD_DEBUG 0
@@ -2524,6 +2526,8 @@ namespace rsx
 
 	void thread::flip(const display_flip_info_t& info)
 	{
+	    vk::g_zcull_frame_index++;  // ZCULL TRACER
+
 		m_eng_interrupt_mask.clear(rsx::display_interrupt);
 
 		if (async_flip_requested & flip_request::any)
@@ -2552,18 +2556,49 @@ namespace rsx
 		last_host_flip_timestamp = get_system_time();
 	}
 
-	void thread::check_zcull_status(bool framebuffer_swap)
+void thread::check_zcull_status(bool framebuffer_swap)
+{
+	const bool zcull_rendering_enabled = !!method_registers.registers[NV4097_SET_ZCULL_EN];
+	const bool zcull_stats_enabled = !!method_registers.registers[NV4097_SET_ZCULL_STATS_ENABLE];
+	const bool zcull_pixel_cnt_enabled = !!method_registers.registers[NV4097_SET_ZPASS_PIXEL_COUNT_ENABLE];
+	
+	// Track last valid depth address globally
+	static u32 s_last_valid_zeta_address = 0;
+	
+	if (framebuffer_swap)
 	{
-		const bool zcull_rendering_enabled = !!method_registers.registers[NV4097_SET_ZCULL_EN];
-		const bool zcull_stats_enabled = !!method_registers.registers[NV4097_SET_ZCULL_STATS_ENABLE];
-		const bool zcull_pixel_cnt_enabled = !!method_registers.registers[NV4097_SET_ZPASS_PIXEL_COUNT_ENABLE];
+		zcull_surface_active = false;
 
-		if (framebuffer_swap)
+
+
+		const u32 zeta_address = m_depth_surface_info.address;
+
+		// Intercept NULL ZCULL binds globally
+		u32 effective_zeta_address = zeta_address;
+
+		// If game provides a valid address, remember it
+		if (zeta_address != 0)
 		{
-			zcull_surface_active = false;
-			const u32 zeta_address = m_depth_surface_info.address;
+			s_last_valid_zeta_address = zeta_address;
+		}
+		// If game provides 0, reuse last valid depth
+		else if (s_last_valid_zeta_address != 0)
+		{
+			effective_zeta_address = s_last_valid_zeta_address;
+		}
 
-			if (zeta_address)
+		// ZCULL TRACER (now logs the corrected address)
+		zcull_tracer::g_tracked_main_depth_addr = effective_zeta_address;
+		zcull_tracer::g_depth_instance_id++;
+		ZCULL_TRACE("[ZCULL_BIND] frame=%llu rsx_addr=0x%X instance_id=%u width=%u height=%u",
+			vk::g_zcull_frame_index,
+			effective_zeta_address, // <-- use effective, not raw
+			zcull_tracer::g_depth_instance_id,
+			m_depth_surface_info.width,
+			m_depth_surface_info.height);
+
+		// Only proceed if we actually have something usable
+		if (effective_zeta_address)
 			{
 				//Find zeta address in bound zculls
 				for (const auto& zcull : zculls)
@@ -2573,7 +2608,7 @@ namespace rsx
 						rsx::to_surface_antialiasing(zcull.aaFormat) == rsx::method_registers.surface_antialias())
 					{
 						const u32 rsx_address = rsx::get_address(zcull.offset, CELL_GCM_LOCATION_LOCAL);
-						if (rsx_address == zeta_address)
+						if (rsx_address == effective_zeta_address)
 						{
 							zcull_surface_active = true;
 							break;

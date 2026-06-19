@@ -97,6 +97,8 @@ private:
 	std::unique_ptr<vk::swapchain_base> m_swapchain;
 	vk::instance m_instance;
 	vk::render_device *m_device;
+    // TS3 FIX
+	void hard_wait_for_zcull(); // <--- TS3 FIX 
 
 	//Vulkan internals
 	std::unique_ptr<vk::query_pool_manager> m_occlusion_query_manager;

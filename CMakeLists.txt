@@ -68,6 +68,11 @@ set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/buildfiles/cmake")
 
 include(CheckCXXCompilerFlag)
 
+# Toy Story 3 FIX !!! 
+include_directories(BEFORE
+    ${CMAKE_SOURCE_DIR}/3rdparty/protobuf/protobuf/src
+)
+
 get_property(IS_MULTI_CONFIG GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
 if(IS_MULTI_CONFIG)
     # TODO(cjj19970505@live.cn)

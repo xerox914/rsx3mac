@@ -173,7 +173,24 @@ void GLGSRender::init_buffers(rsx::framebuffer_creation_context context, bool /*
 			m_surface_info[i].color_format = m_framebuffer_layout.color_format;
 			m_surface_info[i].bpp = color_bpp;
 			m_surface_info[i].samples = samples;
-			m_gl_texture_cache.notify_surface_changed(m_surface_info[i].get_memory_range(m_framebuffer_layout.aa_factors));
+			
+			const auto fb_range = m_surface_info[i].get_memory_range(m_framebuffer_layout.aa_factors);
+
+			rsx_log.error(
+				"[FB DEBUG] GL color[%u]: addr=0x%08x pitch=%u w=%u h=%u bpp=%u samples=%u"
+				" range.start=0x%08x range.len=%u",
+				i,
+				m_surface_info[i].address,
+				m_surface_info[i].pitch,
+				m_surface_info[i].width,
+				m_surface_info[i].height,
+				m_surface_info[i].bpp,
+				m_surface_info[i].samples,
+				fb_range.start,
+				fb_range.length()
+			);
+
+			m_gl_texture_cache.notify_surface_changed(fb_range);
 		}
 		else
 		{
@@ -204,7 +221,22 @@ void GLGSRender::init_buffers(rsx::framebuffer_creation_context context, bool /*
 		m_depth_surface_info.bpp = get_format_block_size_in_bytes(m_framebuffer_layout.depth_format);
 		m_depth_surface_info.samples = samples;
 
-		m_gl_texture_cache.notify_surface_changed(m_depth_surface_info.get_memory_range(m_framebuffer_layout.aa_factors));
+		const auto z_range = m_depth_surface_info.get_memory_range(m_framebuffer_layout.aa_factors);
+
+		rsx_log.error(
+			"[FB DEBUG] GL depth: addr=0x%08x pitch=%u w=%u h=%u bpp=%u samples=%u"
+			" range.start=0x%08x range.len=%u",
+			m_depth_surface_info.address,
+			m_depth_surface_info.pitch,
+			m_depth_surface_info.width,
+			m_depth_surface_info.height,
+			m_depth_surface_info.bpp,
+			m_depth_surface_info.samples,
+			z_range.start,
+			z_range.length()
+		);
+
+		m_gl_texture_cache.notify_surface_changed(z_range);
 	}
 	else
 	{

@@ -171,33 +171,101 @@ namespace vk
 
 	u64 get_renderpass_key(const std::vector<vk::image*>& images, const std::vector<u8>& input_attachment_ids)
 	{
+		// Safety: no attachments
+		if (images.empty())
+		{
+			rsx_log.error("get_renderpass_key: images list is empty");
+			return 0; // harmless, will never match a real renderpass
+		}
+
 		renderpass_key_blob key(0);
 
 		for (u32 i = 0; i < ::size32(images); ++i)
 		{
-			const auto& surface = images[i];
-			key.set_format(surface->format());
-			key.set_layout(i, surface->current_layout);
+			const auto* surface = images[i];
+
+			// Safety: null surface
+			if (!surface)
+			{
+				rsx_log.error("get_renderpass_key: NULL image at index %u", i);
+				return 0;
+			}
+
+			// Safety: layout must be one of the supported ones
+			const auto layout = surface->current_layout;
+			switch (+layout)
+			{
+			case VK_IMAGE_LAYOUT_ATTACHMENT_FEEDBACK_LOOP_OPTIMAL_EXT:
+			case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL:
+			case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
+			case VK_IMAGE_LAYOUT_GENERAL:
+				key.set_format(surface->format());
+				key.set_layout(i, layout);
+				break;
+			default:
+				rsx_log.error("get_renderpass_key: unsupported image layout 0x%x at index %u", static_cast<u32>(layout), i);
+				return 0;
+			}
 		}
 
 		for (const auto& ref_id : input_attachment_ids)
 		{
-			key.set_input_attachment(ref_id);
+			if (ref_id < 5)
+			{
+				key.set_input_attachment(ref_id);
+			}
+			else
+			{
+				rsx_log.error("get_renderpass_key: input attachment id %u out of range", ref_id);
+			}
 		}
 
-		key.sample_count = images[0]->samples();
+		// Safety: sample count from first image, but only if valid
+		const auto* first = images[0];
+		if (!first)
+		{
+			rsx_log.error("get_renderpass_key: first image is NULL");
+			return 0;
+		}
+
+		key.sample_count = first->samples();
 		return key.encoded;
 	}
 
 	u64 get_renderpass_key(const std::vector<vk::image*>& images, u64 previous_key)
 	{
 		// Partial update; assumes compatible renderpass keys
+		if (images.empty())
+		{
+			rsx_log.error("get_renderpass_key (partial): images list is empty");
+			return previous_key;
+		}
+
 		renderpass_key_blob key(previous_key);
 		key.layout_blob = 0;
 
 		for (u32 i = 0; i < ::size32(images); ++i)
 		{
-			key.set_layout(i, images[i]->current_layout);
+			const auto* surface = images[i];
+			if (!surface)
+			{
+				rsx_log.error("get_renderpass_key (partial): NULL image at index %u", i);
+				return previous_key;
+			}
+
+			const auto layout = surface->current_layout;
+			switch (+layout)
+			{
+			case VK_IMAGE_LAYOUT_ATTACHMENT_FEEDBACK_LOOP_OPTIMAL_EXT:
+			case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL:
+			case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
+			case VK_IMAGE_LAYOUT_GENERAL:
+				key.set_layout(i, layout);
+				break;
+			default:
+				rsx_log.error("get_renderpass_key (partial): unsupported image layout 0x%x at index %u", static_cast<u32>(layout), i);
+				return previous_key;
+			}
 		}
 
 		return key.encoded;
