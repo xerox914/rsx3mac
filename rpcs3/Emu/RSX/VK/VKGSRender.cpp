@@ -26,6 +26,7 @@
 #include "util/asm.hpp"
 #include <vulkan/vulkan_core.h>
 #include "Emu/RSX/zcull_tracer.h"
+#include "Emu/fastlog.h"
 
 namespace vk
 {
@@ -993,6 +994,11 @@ void VKGSRender::on_invalidate_memory_range(const utils::address_range32& range,
 				m_samplers_dirty.store(true);
 			}
 		}
+		
+		fastlog_printf("<%llu>DMAS OFF /ADDR%#x/#%u/\n",
+			fastlog::fastlog_timestamp(),
+			range.start,
+			range.length());
 
 		vk::unmap_dma(range.start, range.length());
 	}
@@ -1232,8 +1238,6 @@ void VKGSRender::bind_viewport()
 
 void VKGSRender::on_init_thread()
 {
-	rsx_log.notice("[RSX|INIT]");
-
 	if (m_device == VK_NULL_HANDLE)
 	{
 		fmt::throw_exception("No Vulkan device was created");
@@ -1271,6 +1275,7 @@ void VKGSRender::on_init_thread()
 void VKGSRender::on_exit()
 {
 	rsx_log.notice("[RSX|EXIT]");
+	fastlog::fastlog_shutdown(); // SHUTDOWN FASTLOG
 
 	GSRender::on_exit();
 	vk::destroy_pipe_compiler(); // Ensure no pending shaders being compiled

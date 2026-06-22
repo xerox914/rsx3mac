@@ -10,6 +10,7 @@
 #include "vkutils/device.h"
 #include "vkutils/image.h"
 #include "vkutils/scratch.h"
+#include "Emu/fastlog.h"
 
 namespace vk
 {
@@ -220,6 +221,12 @@ namespace vk
 			const rsx::surface_scaling_config_t& resolution_scaling_config,
 			vk::render_device& device, vk::command_buffer& cmd)
 		{
+			fastlog_printf("<%llu>RTTC/W#%u/H#%u/FMT#%u/\n",
+					fastlog::fastlog_timestamp(),
+					static_cast<u32>(width),
+					static_cast<u32>(height),
+					static_cast<u32>(format));
+
 			const auto fmt = vk::get_compatible_surface_format(format);
 			VkFormat requested_format = fmt.first;
 
@@ -293,6 +300,12 @@ namespace vk
 			vk::render_device& device, vk::command_buffer& cmd)
 		{
 			const VkFormat requested_format = vk::get_compatible_depth_surface_format(device.get_formats_support(), format);
+			
+			fastlog_printf("<%llu>RTTC/W#%u/H#%u/FMT#%u/\n",
+					fastlog::fastlog_timestamp(),
+					static_cast<u32>(width),
+					static_cast<u32>(height),
+					static_cast<u32>(format));
 
 			u8 samples;
 			rsx::surface_sample_layout sample_layout;
@@ -612,12 +625,28 @@ namespace vk
 			}
 
 			auto dest = bo;
-			const auto transfer_size = surface->get_memory_range().length();
+			
+			// TEMP: skip scratch‑buffer path when surface range is invalid
+			const auto range = surface->get_memory_range();
+			size_t transfer_size = 0;
+
+			if (!range.valid())
+			{
+				rsx_log.error("Invalid range...");
+				goto skip_scratch;
+			}
+
+			transfer_size = range.length();
+
 			if (transfer_size > max_copy_length || src_offset_in_buffer || surface->is_depth_surface())
 			{
-				auto scratch = vk::get_scratch_buffer(cmd, transfer_size * 4, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT);
+				auto scratch = vk::get_scratch_buffer(cmd, transfer_size * 4,
+													  VK_PIPELINE_STAGE_TRANSFER_BIT,
+													  VK_ACCESS_TRANSFER_WRITE_BIT);
 				dest = scratch;
 			}
+			// TEMP: skip scratch‑buffer path when surface range is invalid
+			skip_scratch:;
 
 			VkBufferImageCopy region =
 			{

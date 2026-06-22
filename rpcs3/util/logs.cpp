@@ -289,6 +289,10 @@ namespace logs
 	// Must be called in main() to stop accumulating messages in g_messages
 	void set_init(std::initializer_list<stored_message> init_msg)
 	{
+		// RSX2MAC :: disable the RPCS3 native logging system
+		return;
+		// RSX2MAC :: disable the RPCS3 native logging system
+		
 		if (!g_init)
 		{
 			std::lock_guard lock(g_mutex);
@@ -331,6 +335,10 @@ logs::listener::~listener()
 
 void logs::listener::add(logs::listener* _new)
 {
+	// RSX2MAC :: disable the RPCS3 native logging system
+	return;
+	// RSX2MAC :: disable the RPCS3 native logging system
+	
 	// Get first (main) listener
 	listener* lis = get_logger();
 

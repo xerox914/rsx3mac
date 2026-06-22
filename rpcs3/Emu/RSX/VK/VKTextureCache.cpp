@@ -5,6 +5,7 @@
 #include "VKAsyncScheduler.h"
 
 #include "util/asm.hpp"
+#include "Emu/fastlog.h"
 
 namespace vk
 {
@@ -64,6 +65,23 @@ namespace vk
 
 	void cached_texture_section::dma_transfer(vk::command_buffer& cmd, vk::image* src, const areai& src_area, const utils::address_range32& valid_range, u32 pitch)
 	{
+		if (!valid_range.valid())
+		{
+			rsx_log.error("[TEMP-DBG] dma_transfer: invalid valid_range "
+						  "(start=0x%08x end=0x%08x)", valid_range.start, valid_range.end);
+			return;
+		}
+
+		rsx_log.error(
+			"[TEMP-DBG] dma_transfer: valid_range=[0x%08x, 0x%08x) len=0x%08x "
+			"src_area=(%d,%d)-(%d,%d) pitch=0x%08x",
+			valid_range.start, valid_range.end,
+			valid_range.length(),
+			src_area.x1, src_area.y1,
+			src_area.x2, src_area.y2,
+			pitch
+		);
+		
 		ensure(src->samples() == 1);
 
 		if (!m_device)
@@ -107,10 +125,10 @@ namespace vk
 				return;
 			}
 
-			dma_mapping = vk::map_dma(dma_sync_region.start, dma_sync_region.length());
+			dma_mapping = vk::map_dma(dma_sync_region.start, rsx::safe_length(dma_sync_region, "VKTC::dma_sync_region"));
 			if (load)
 			{
-				vk::load_dma(dma_sync_region.start, dma_sync_region.length());
+				vk::load_dma(dma_sync_region.start, rsx::safe_length(dma_sync_region, "VKTC::dma_sync_region"));
 			}
 		};
 
@@ -143,6 +161,13 @@ namespace vk
 			bool require_rw_barrier = true;
 			image_readback_options_t xfer_options{};
 			xfer_options.swap_bytes = require_format_conversion && pack_unpack_swap_bytes;
+			
+			// TEXR probe: GPU → CPU texture readback
+			fastlog_printf("<%llu>TEXR▼/ADDR%#x/#%u/\n",
+					fastlog::fastlog_timestamp(),
+					dma_sync_region.start,
+					dma_sync_region.length());
+
 			vk::copy_image_to_buffer(cmd, src, working_buffer, region, xfer_options);
 
 			// NOTE: For depth/stencil formats, copying to buffer and byteswap are combined into one step above
@@ -215,11 +240,11 @@ namespace vk
 					VkBufferCopy mem_load{};
 					mem_load.srcOffset = dma_mapping.first;
 					mem_load.dstOffset = dst_offset;
-					mem_load.size = dma_sync_region.length();
+					mem_load.size = rsx::safe_length(dma_sync_region, "VKTC::dma_sync_region");
 					vkCmdCopyBuffer(cmd, dma_mapping.second->value, working_buffer->value, 1, &mem_load);
 
 					// Transfer -> Compute barrier
-					vk::insert_buffer_memory_barrier(cmd, working_buffer->value, dst_offset, dma_sync_region.length(),
+					vk::insert_buffer_memory_barrier(cmd, working_buffer->value, dst_offset, rsx::safe_length(dma_sync_region, "VKTC::dma_sync_region"),
 						VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
 						VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT);
 				}
@@ -284,7 +309,7 @@ namespace vk
 
 			if (require_rw_barrier)
 			{
-				vk::insert_buffer_memory_barrier(cmd, working_buffer->value, result_offset, dma_sync_region.length(),
+				vk::insert_buffer_memory_barrier(cmd, working_buffer->value, result_offset, rsx::safe_length(dma_sync_region, "VKTC::dma_sync_region"),
 					VK_PIPELINE_STAGE_TRANSFER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
 					VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT,
 					VK_ACCESS_TRANSFER_WRITE_BIT | VK_ACCESS_SHADER_WRITE_BIT,
@@ -298,7 +323,7 @@ namespace vk
 				VkBufferCopy copy = {};
 				copy.srcOffset = result_offset;
 				copy.dstOffset = dma_mapping.first;
-				copy.size = dma_sync_region.length();
+				copy.size = rsx::safe_length(dma_sync_region, "VKTC::dma_sync_region");
 				vkCmdCopyBuffer(cmd, working_buffer->value, dma_mapping.second->value, 1, &copy);
 			}
 			else
@@ -338,7 +363,7 @@ namespace vk
 		// Post-transfer barrier on dma layer
 		vk::insert_buffer_memory_barrier(
 			cmd, dma_mapping.second->value,
-			dma_mapping.first, dma_sync_region.length(),
+			dma_mapping.first, rsx::safe_length(dma_sync_region, "VKTC::dma_sync_region"),
 			VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
 			VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_TRANSFER_WRITE_BIT
 		);
@@ -354,7 +379,7 @@ namespace vk
 			.dstAccessMask = 0,
 			.buffer = dma_mapping.second->value,
 			.offset = dma_mapping.first,
-			.size = valid_range.length()
+			.size = rsx::safe_length(valid_range, "VKTC::valid_range")
 		};
 
 		// Create event object for this transfer and queue signal op
@@ -973,9 +998,16 @@ namespace vk
 		dst->pop_layout(cmd);
 	}
 
-	cached_texture_section* texture_cache::create_new_texture(vk::command_buffer& cmd, const utils::address_range32& rsx_range, u16 width, u16 height, u16 depth, u16 mipmaps, u32 pitch,
+cached_texture_section* texture_cache::create_new_texture(vk::command_buffer& cmd, const utils::address_range32& rsx_range, u16 width, u16 height, u16 depth, u16 mipmaps, u32 pitch,
 		u32 gcm_format, rsx::texture_upload_context context, rsx::texture_dimension_extended type, bool swizzled, rsx::component_order swizzle_flags, rsx::flags32_t flags)
 	{
+		if (!rsx_range.valid())
+		{
+			rsx_log.error("[TEMP-DBG] create_new_texture: invalid rsx_range "
+						  "(start=0x%08x end=0x%08x)", rsx_range.start, rsx_range.end);
+			return nullptr;
+		}
+
 		rsx_log.notice("[TC|CREATE]");
 		
 		const auto section_depth = depth;
@@ -1200,6 +1232,19 @@ namespace vk
 	cached_texture_section* texture_cache::upload_image_from_cpu(vk::command_buffer& cmd, const utils::address_range32& rsx_range, u16 width, u16 height, u16 depth, u16 mipmaps, u32 pitch, u32 gcm_format,
 		rsx::texture_upload_context context, const std::vector<rsx::subresource_layout>& subresource_layout, rsx::texture_dimension_extended type, bool swizzled)
 	{
+		if (!rsx_range.valid())
+		{
+			rsx_log.error("[TEMP-DBG] upload_image_from_cpu: invalid rsx_range "
+						  "(start=0x%08x end=0x%08x)", rsx_range.start, rsx_range.end);
+			return nullptr;
+		}
+		
+		// TEXU probe: CPU → GPU texture upload
+		fastlog_printf("<%llu>TEXU▼/ADDR%#x/#%u/\n",
+				fastlog::fastlog_timestamp(),
+				rsx_range.start,
+				rsx_range.length());
+
 		if (context != rsx::texture_upload_context::shader_read)
 		{
 			if (vk::is_renderpass_open(cmd))

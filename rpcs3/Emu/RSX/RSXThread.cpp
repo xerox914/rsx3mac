@@ -34,6 +34,7 @@
 #include <unordered_set>
 
 #include "Emu/RSX/zcull_tracer.h"
+#include "Emu/fastlog.h"
 
 class GSRender;
 
@@ -1124,6 +1125,8 @@ namespace rsx
 
 		while (!test_stopped())
 		{
+			fastlog::heartbeat();   // 🔥 Burst-mode heartbeat (once per RSX frame)
+			
 			// Wait for external pause events
 			if (external_interrupt_lock)
 			{

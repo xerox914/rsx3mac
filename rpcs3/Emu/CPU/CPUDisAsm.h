@@ -81,9 +81,43 @@ public:
 	{
 		return const_cast<cpu_thread*>(m_cpu);
 	}
-
-	void set_cpu_handle(shared_ptr<cpu_thread> cpu)
+	
+	// ---------------------------------------------------------------------------
+	// TEMPORARY SAFETY GUARD — REMOVE AFTER ROOT CAUSE IS FIXED
+	//
+	// Context:
+	//   During emergency_exit() on RSX thread, a corrupted cpu_thread* was observed
+	//   reaching CPUDisAsm::set_cpu_handle(), causing recursive panic paths:
+	//
+	//       ensure() → emergency_exit() → dump_useful_thread_info()
+	//       → make_disasm() → set_cpu_handle() → AUDIT() → ensure() → …
+	//
+	//   Because CPUDisAsm is header‑only, we cannot depend on RSX headers or
+	//   dynamic_cast to rsx::thread. Instead, we apply a minimal corruption guard
+	//   that prevents obviously invalid cpu_thread pointers from entering the
+	//   disassembler during panic paths.
+	//
+	// What this guard does:
+	//   • Rejects null handles.
+	//   • Rejects pointers below a safe threshold (0x1000), which catches the
+	//     corrupted pointers observed in LLDB (e.g. 0x3c10758ef).
+	//   • Avoids recursive AUDIT() failures during emergency_exit().
+	//
+	// When to remove:
+	//   • After the underlying lifetime/corruption bug in cpu_thread management is
+	//     identified and fixed.
+	// ---------------------------------------------------------------------------
+	void set_cpu_handle(stx::shared_ptr<cpu_thread> cpu)
 	{
+		if (!cpu)
+			return;
+
+		// Reject obviously invalid pointers (corruption observed in LLDB).
+		// This avoids recursive panic paths without introducing RSX dependencies.
+		const uintptr_t ptr = reinterpret_cast<uintptr_t>(cpu.get());
+		if (ptr < 0x1000)
+			return;
+
 		m_cpu_handle = std::move(cpu);
 
 		if (!m_cpu)

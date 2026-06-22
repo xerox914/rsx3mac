@@ -10,6 +10,8 @@
 #include "util/asm.hpp"
 #include <unordered_map>
 
+#include "Emu/fastlog.h"
+
 namespace vk
 {
 	static constexpr usz s_dma_block_length = 0x00010000;
@@ -410,6 +412,11 @@ namespace vk
 
 	void unmap_dma(u32 local_address, u32 length)
 	{
+		fastlog_printf("<%llu>DMAS OFF /ADDR$%08X/#%u/\n",
+				fastlog::fastlog_timestamp(),
+				local_address,
+				length);
+
 		std::lock_guard lock(g_dma_mutex);
 
 		const u32 start = (local_address & s_dma_block_mask);

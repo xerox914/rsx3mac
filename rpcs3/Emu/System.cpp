@@ -65,6 +65,8 @@
 #include "llvm/Config/llvm-config.h"
 #endif
 
+#include "Emu/fastlog.h"
+
 LOG_CHANNEL(sys_log, "SYS");
 
 // Preallocate 32 MiB
@@ -410,6 +412,9 @@ extern void dump_executable(std::span<const u8> data, const ppu_module<lv2_obj>*
 
 void Emulator::Init()
 {
+	// RSX3MAC INIT LOGGING
+	fastlog::fastlog_bootstrap();
+	
 	// Log LLVM version
 	if (static bool logged_llvm = false; !logged_llvm)
 	{

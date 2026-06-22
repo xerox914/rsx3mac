@@ -173,24 +173,34 @@ void GLGSRender::init_buffers(rsx::framebuffer_creation_context context, bool /*
 			m_surface_info[i].color_format = m_framebuffer_layout.color_format;
 			m_surface_info[i].bpp = color_bpp;
 			m_surface_info[i].samples = samples;
-			
+
 			const auto fb_range = m_surface_info[i].get_memory_range(m_framebuffer_layout.aa_factors);
 
-			rsx_log.error(
-				"[FB DEBUG] GL color[%u]: addr=0x%08x pitch=%u w=%u h=%u bpp=%u samples=%u"
-				" range.start=0x%08x range.len=%u",
-				i,
-				m_surface_info[i].address,
-				m_surface_info[i].pitch,
-				m_surface_info[i].width,
-				m_surface_info[i].height,
-				m_surface_info[i].bpp,
-				m_surface_info[i].samples,
-				fb_range.start,
-				fb_range.length()
-			);
+			// TEMP: guard against invalid framebuffer ranges in GL debug/notify path
+			if (!fb_range.valid())
+			{
+				rsx_log.error(
+					"[TEMP-DBG] GLRT: invalid color fb_range (index=%u start=0x%08x end=0x%08x) — skipping notify_surface_changed",
+					i, fb_range.start, fb_range.end);
+			}
+			else
+			{
+				rsx_log.error(
+					"[FB DEBUG] GL color[%u]: addr=0x%08x pitch=%u w=%u h=%u bpp=%u samples=%u"
+					" range.start=0x%08x range.len=%u",
+					i,
+					m_surface_info[i].address,
+					m_surface_info[i].pitch,
+					m_surface_info[i].width,
+					m_surface_info[i].height,
+					m_surface_info[i].bpp,
+					m_surface_info[i].samples,
+					fb_range.start,
+					fb_range.length()
+				);
 
-			m_gl_texture_cache.notify_surface_changed(fb_range);
+				m_gl_texture_cache.notify_surface_changed(fb_range);
+			}
 		}
 		else
 		{
@@ -223,20 +233,30 @@ void GLGSRender::init_buffers(rsx::framebuffer_creation_context context, bool /*
 
 		const auto z_range = m_depth_surface_info.get_memory_range(m_framebuffer_layout.aa_factors);
 
-		rsx_log.error(
-			"[FB DEBUG] GL depth: addr=0x%08x pitch=%u w=%u h=%u bpp=%u samples=%u"
-			" range.start=0x%08x range.len=%u",
-			m_depth_surface_info.address,
-			m_depth_surface_info.pitch,
-			m_depth_surface_info.width,
-			m_depth_surface_info.height,
-			m_depth_surface_info.bpp,
-			m_depth_surface_info.samples,
-			z_range.start,
-			z_range.length()
-		);
+		// TEMP: guard against invalid depth framebuffer ranges in GL debug/notify path
+		if (!z_range.valid())
+		{
+			rsx_log.error(
+				"[TEMP-DBG] GLRT: invalid depth z_range (start=0x%08x end=0x%08x) — skipping notify_surface_changed",
+				z_range.start, z_range.end);
+		}
+		else
+		{
+			rsx_log.error(
+				"[FB DEBUG] GL depth: addr=0x%08x pitch=%u w=%u h=%u bpp=%u samples=%u"
+				" range.start=0x%08x range.len=%u",
+				m_depth_surface_info.address,
+				m_depth_surface_info.pitch,
+				m_depth_surface_info.width,
+				m_depth_surface_info.height,
+				m_depth_surface_info.bpp,
+				m_depth_surface_info.samples,
+				z_range.start,
+				z_range.length()
+			);
 
-		m_gl_texture_cache.notify_surface_changed(z_range);
+			m_gl_texture_cache.notify_surface_changed(z_range);
+		}
 	}
 	else
 	{

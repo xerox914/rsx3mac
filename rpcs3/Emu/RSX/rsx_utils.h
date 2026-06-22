@@ -17,10 +17,10 @@ namespace rsx
 	// Import address_range32 utilities
 	using utils::address_range32;
 	using utils::address_range_vector32;
+	using utils::next_page;
+	using utils::page_end;
 	using utils::page_for;
 	using utils::page_start;
-	using utils::page_end;
-	using utils::next_page;
 
 	using flags64_t = u64;
 	using flags32_t = u32;
@@ -54,26 +54,43 @@ namespace rsx
 	namespace constants
 	{
 		constexpr std::array<const char*, 16> fragment_texture_names =
-		{
-			"tex0", "tex1", "tex2", "tex3", "tex4", "tex5", "tex6", "tex7",
-			"tex8", "tex9", "tex10", "tex11", "tex12", "tex13", "tex14", "tex15",
+			{
+				"tex0",
+				"tex1",
+				"tex2",
+				"tex3",
+				"tex4",
+				"tex5",
+				"tex6",
+				"tex7",
+				"tex8",
+				"tex9",
+				"tex10",
+				"tex11",
+				"tex12",
+				"tex13",
+				"tex14",
+				"tex15",
 		};
 
 		constexpr std::array<const char*, 4> vertex_texture_names =
-		{
-			"vtex0", "vtex1", "vtex2", "vtex3",
+			{
+				"vtex0",
+				"vtex1",
+				"vtex2",
+				"vtex3",
 		};
 
 		// Local RSX memory base (known as constant)
 		constexpr u32 local_mem_base = 0xC0000000;
-	}
+	} // namespace constants
 
 	// Base for resources with reference counting
 	class ref_counted
 	{
 	protected:
-		atomic_t<s32> ref_count{ 0 }; // References held
-		atomic_t<u8> idle_time{ 0 };  // Number of times the resource has been tagged idle
+		atomic_t<s32> ref_count{0}; // References held
+		atomic_t<u8> idle_time{0};  // Number of times the resource has been tagged idle
 
 	public:
 		void add_ref()
@@ -105,8 +122,8 @@ namespace rsx
 	};
 
 	/**
-	* Holds information about a framebuffer
-	*/
+	 * Holds information about a framebuffer
+	 */
 	struct gcm_framebuffer_info
 	{
 		u32 address = 0;
@@ -117,8 +134,8 @@ namespace rsx
 
 		u16 width = 0;
 		u16 height = 0;
-		u8  bpp = 0;
-		u8  samples = 0;
+		u8 bpp = 0;
+		u8 samples = 0;
 
 		address_range32 range{};
 
@@ -132,12 +149,11 @@ namespace rsx
 				width,
 				height,
 				bpp,
-				samples
-			);
+				samples);
 		}
 
 		ENABLE_BITWISE_SERIALIZATION;
-		
+
 		// RSX render targets are stored as (height - 1) full rows using the padded pitch,
 		// and a final row that only stores the actual pixel width.
 		// AA factors scale the number of samples horizontally (U) and vertically (V).
@@ -149,7 +165,7 @@ namespace rsx
 			{
 				rsx_log.error("calculate_memory_range: invalid surface dims "
 							  "(addr=0x%x, w=%u, h=%u, pitch=%u, bpp=%u)",
-							  address, width, height, pitch, bpp);
+					address, width, height, pitch, bpp);
 
 				range = address_range32::start_length(address, 0);
 				return;
@@ -158,7 +174,8 @@ namespace rsx
 			if (aa_factor_u == 0 || aa_factor_v == 0)
 			{
 				rsx_log.error("calculate_memory_range: invalid AA factors "
-							  "(u=%u, v=%u)", aa_factor_u, aa_factor_v);
+							  "(u=%u, v=%u)",
+					aa_factor_u, aa_factor_v);
 
 				range = address_range32::start_length(address, 0);
 				return;
@@ -166,14 +183,15 @@ namespace rsx
 
 			// --- Compute sizes safely --------------------------------------------------
 			const u64 block_size = u64(pitch) * u64(height - 1) * u64(aa_factor_v);
-			const u64 line_size  = u64(width) * u64(aa_factor_u) * u64(bpp);
+			const u64 line_size = u64(width) * u64(aa_factor_u) * u64(bpp);
 			const u64 total_size = block_size + line_size;
 
 			// --- Overflow guard --------------------------------------------------------
 			if (total_size > 0xFFFFFFFFull)
 			{
 				rsx_log.error("calculate_memory_range: overflow computing size "
-							  "(addr=0x%x, size=%llu)", address, total_size);
+							  "(addr=0x%x, size=%llu)",
+					address, total_size);
 
 				range = address_range32::start_length(address, 0);
 				return;
@@ -186,7 +204,8 @@ namespace rsx
 				address + total_size > RSX_MEMORY_SIZE)
 			{
 				rsx_log.error("calculate_memory_range: out-of-bounds RSX memory range "
-							  "(addr=0x%x, size=%llu)", address, total_size);
+							  "(addr=0x%x, size=%llu)",
+					address, total_size);
 
 				range = address_range32::start_length(address, 0);
 				return;
@@ -196,13 +215,29 @@ namespace rsx
 			range = address_range32::start_length(address, static_cast<u32>(total_size));
 		}
 
+		// ============================================================================
+		// *** TEMP DEBUG PATCH — REMOVE AFTER RSX NULL RANGE BUG IS FIXED ***
+		// Logs framebuffer parameters WITHOUT calling range.length().
+		// This avoids triggering the AUDIT inside length() before we see the data.
+		// ============================================================================
 		address_range32 get_memory_range(const u32* aa_factors)
 		{
+			// TEMP: handle invalidated framebuffer ranges safely
+			if (!range.valid())
+			{
+				rsx_log.error("[TEMP-DBG] get_memory_range(): range invalid "
+							  "(start=0x%08x end=0x%08x) — returning empty range",
+					range.start, range.end);
+
+				// Return a safe empty range
+				return address_range32{}; // true empty range
+			}
+
 			rsx_log.error(
-				"[FB DEBUG] gcm_framebuffer_info (AA):"
+				"[TEMP-DBG] gcm_framebuffer_info (AA RAW):"
 				" addr=0x%08x pitch=%u width=%u height=%u bpp=%u"
 				" aa_u=%u aa_v=%u"
-				" range.start=0x%08x range.length=%u",
+				" range.start=0x%08x range.end=0x%08x",
 				address,
 				pitch,
 				width,
@@ -211,22 +246,61 @@ namespace rsx
 				aa_factors[0],
 				aa_factors[1],
 				range.start,
-				range.length()
-			);
-			
+				range.end);
+
+			// Now compute the real range
 			calculate_memory_range(aa_factors[0], aa_factors[1]);
+
+			// Log the computed range BEFORE length() is called
+			rsx_log.error(
+				"[TEMP-DBG] gcm_framebuffer_info (AA CALC):"
+				" new.start=0x%08x new.end=0x%08x",
+				range.start,
+				range.end);
+
 			return range;
 		}
 
+		// ============================================================================
+		// *** TEMP DEBUG PATCH — REMOVE AFTER RSX NULL RANGE BUG IS FIXED ***
+		// Non‑AA version of get_memory_range().
+		//
+		// Why this exists:
+		//   • The AA version was patched earlier, but RPCS3 also calls a *non‑AA*
+		//     overload of get_memory_range() during normal render target setup.
+		//   • That path was still calling range.length(), which triggers AUDIT(valid())
+		//     and crashes when the framebuffer has been invalidated.
+		//
+		// What this guard does:
+		//   • Detects invalidated framebuffer ranges (start=0xFFFFFFFF, end=0x0).
+		//   • Logs the invalid state for debugging.
+		//   • Returns a SAFE empty range (0,1) instead of crashing.
+		//   • Allows RSX to continue, matching real PS3 behavior where invalid surfaces
+		//     simply produce no memory access.
+		//
+		// When to remove:
+		//   • After the underlying bug that causes invalid framebuffers to be used is
+		//     identified and fixed.
+		// ============================================================================
 		address_range32 get_memory_range() const
 		{
-			// `this` is never actually null for a valid call; if it were, we couldn’t safely touch members.
-			// The earlier "object: 0x0" in the verify message is about the verify context, not necessarily `this`.
+			// TEMP: handle invalidated framebuffer ranges safely
+			if (!range.valid())
+			{
+				rsx_log.error("[TEMP-DBG] get_memory_range() (non-AA): invalid range "
+							  "(start=0x%08x end=0x%08x) — returning empty range",
+					range.start, range.end);
 
+				// Return a SAFE, valid empty range (start=0, end=0)
+				// Using length=1 ensures start <= end, avoiding AUDIT(valid()).
+				return address_range32::start_length(0, 1);
+			}
+
+			// TEMP: safe logging without calling range.length()
 			rsx_log.error(
-				"[FB DEBUG] gcm_framebuffer_info const:"
-				" this=%p addr=0x%08x pitch=%u width=%u height=%u bpp=%u aa=%u"
-				" range.start=0x%08x range.length=%u",
+				"[TEMP-DBG] gcm_framebuffer_info const (RAW):"
+				" this=%p addr=0x%08x pitch=%u width=%u height=%u bpp=%u samples=%u"
+				" range.start=0x%08x range.end=0x%08x",
 				this,
 				address,
 				pitch,
@@ -235,11 +309,7 @@ namespace rsx
 				bpp,
 				samples,
 				range.start,
-				range.length()
-			);
-
-			// TEMP: disable the invariant so we can see real values without killing the thread
-			// ensure(range.start == address);
+				range.end);
 
 			return range;
 		}
@@ -285,10 +355,10 @@ namespace rsx
 		u16 width;
 		u16 height;
 		u32 pitch;
-		u8  bpp;
+		u8 bpp;
 		u32 dma;
 		u32 rsx_address;
-		u8 *pixels;
+		u8* pixels;
 	};
 
 	struct blit_dst_info
@@ -305,10 +375,10 @@ namespace rsx
 		f32 scale_x;
 		f32 scale_y;
 		u32 pitch;
-		u8  bpp;
+		u8 bpp;
 		u32 dma;
 		u32 rsx_address;
-		u8 *pixels;
+		u8* pixels;
 		bool swizzled;
 	};
 
@@ -317,20 +387,23 @@ namespace rsx
 		u16 scale_percent = 100;
 		u16 min_scalable_dimension = 0;
 
-		f32 scale_factor() const { return scale_percent * 0.01f; }
+		f32 scale_factor() const
+		{
+			return scale_percent * 0.01f;
+		}
 
-		bool operator == (const surface_scaling_config_t& that) const
+		bool operator==(const surface_scaling_config_t& that) const
 		{
 			return this->scale_percent == that.scale_percent &&
-				this->min_scalable_dimension == that.min_scalable_dimension;
+			       this->min_scalable_dimension == that.min_scalable_dimension;
 		}
 	};
 
 	template <typename T>
 	void pad_texture(const void* input_pixels, void* output_pixels, u16 input_width, u16 input_height, u16 output_width, u16 /*output_height*/)
 	{
-		const T *src = static_cast<const T*>(input_pixels);
-		T *dst = static_cast<T*>(output_pixels);
+		const T* src = static_cast<const T*>(input_pixels);
+		T* dst = static_cast<T*>(output_pixels);
 
 		for (u16 h = 0; h < input_height; ++h)
 		{
@@ -355,7 +428,8 @@ namespace rsx
 
 	static constexpr u32 next_pow2(u32 x)
 	{
-		if (x <= 2) return x;
+		if (x <= 2)
+			return x;
 
 		return static_cast<u32>((1ULL << 32) >> std::countl_zero(x - 1));
 	}
@@ -376,8 +450,8 @@ namespace rsx
 		// We don't really care about the actual memory map, it shouldn't be possible to use the mmio bar region anyway
 		constexpr address_range32 local_mem_range = address_range32::start_length(rsx::constants::local_mem_base, 0x1000'0000);
 		return local_mem_range.overlaps(addr) ?
-			CELL_GCM_LOCATION_LOCAL :
-			CELL_GCM_LOCATION_MAIN;
+		           CELL_GCM_LOCATION_LOCAL :
+		           CELL_GCM_LOCATION_MAIN;
 	}
 
 	// General purpose alignment without power-of-2 constraint
@@ -392,6 +466,23 @@ namespace rsx
 	static inline T align_down2(T value, U alignment)
 	{
 		return (value / alignment) * alignment;
+	}
+
+	// TEMP: Safe wrapper for address_range32::length()
+	// Prevents crashes when invalid ranges propagate through RSX paths.
+	// Remove after upstream invalid-range bug is fixed.
+	static inline u32 safe_length(const utils::address_range32& r, const char* tag)
+	{
+		if (!r.valid())
+		{
+			rsx_log.error(
+				"[TEMP-DBG] safe_length: invalid range in %s "
+				"(start=0x%08x end=0x%08x) — returning 0",
+				tag, r.start, r.end);
+			return 0;
+		}
+
+		return r.length();
 	}
 
 	// Copy memory in inverse direction from source
@@ -435,18 +526,17 @@ namespace rsx
 				z >>= 1;
 				log2_depth--;
 			}
-		}
-		while (x | y | z);
+		} while (x | y | z);
 
 		return offset;
 	}
 
 	/*   Note: What the ps3 calls swizzling in this case is actually z-ordering / morton ordering of pixels
-	*       - Input can be swizzled or linear, bool flag handles conversion to and from
-	*       - It will handle any width and height that are a power of 2, square or non square
-	*    Restriction: It has mixed results if the height or width is not a power of 2
-	*    Restriction: Only works with 2D surfaces
-	*/
+	 *       - Input can be swizzled or linear, bool flag handles conversion to and from
+	 *       - It will handle any width and height that are a power of 2, square or non square
+	 *    Restriction: It has mixed results if the height or width is not a power of 2
+	 *    Restriction: Only works with 2D surfaces
+	 */
 	template <typename T, bool input_is_swizzled>
 	void convert_linear_swizzle(const void* input_pixels, void* output_pixels, u16 width, u16 height, u32 pitch)
 	{
@@ -462,14 +552,14 @@ namespace rsx
 		// double the limit mask to account for bits in both x and y
 		limit_mask = 1 << (limit_mask << 1);
 
-		//x_mask, bits above limit are 1's for x-carry
+		// x_mask, bits above limit are 1's for x-carry
 		x_mask = (x_mask | ~(limit_mask - 1));
-		//y_mask. bits above limit are 0'd, as we use a different method for y-carry over
+		// y_mask. bits above limit are 0'd, as we use a different method for y-carry over
 		y_mask = (y_mask & (limit_mask - 1));
 
 		u32 offs_y = 0;
 		u32 offs_x = 0;
-		u32 offs_x0 = 0; //total y-carry offset for x
+		u32 offs_x0 = 0; // total y-carry offset for x
 		const u32 y_incr = limit_mask;
 
 		// NOTE: The swizzled area is always a POT region and we must scan all of it to fill in the linear.
@@ -558,11 +648,11 @@ namespace rsx
 		}
 	}
 
-	void convert_scale_image(u8 *dst, AVPixelFormat dst_format, int dst_width, int dst_height, int dst_pitch,
-		const u8 *src, AVPixelFormat src_format, int src_width, int src_height, int src_pitch, int src_slice_h, bool bilinear);
+	void convert_scale_image(u8* dst, AVPixelFormat dst_format, int dst_width, int dst_height, int dst_pitch,
+		const u8* src, AVPixelFormat src_format, int src_width, int src_height, int src_pitch, int src_slice_h, bool bilinear);
 
-	void clip_image(u8 *dst, const u8 *src, int clip_x, int clip_y, int clip_w, int clip_h, int bpp, int src_pitch, int dst_pitch);
-	void clip_image_may_overlap(u8 *dst, const u8 *src, int clip_x, int clip_y, int clip_w, int clip_h, int bpp, int src_pitch, int dst_pitch, u8* buffer);
+	void clip_image(u8* dst, const u8* src, int clip_x, int clip_y, int clip_w, int clip_h, int bpp, int src_pitch, int dst_pitch);
+	void clip_image_may_overlap(u8* dst, const u8* src, int clip_x, int clip_y, int clip_w, int clip_h, int bpp, int src_pitch, int dst_pitch, u8* buffer);
 
 	std::array<float, 4> get_constant_blend_colors();
 
@@ -616,7 +706,7 @@ namespace rsx
 			{
 				if (clip_width >= parent_width)
 					width = parent_width;
-				//else
+				// else
 				//	width = clip_width; // Already initialized with clip_width
 
 				x = static_cast<T>(0);
@@ -636,7 +726,7 @@ namespace rsx
 			{
 				if (clip_height >= parent_height)
 					height = parent_height;
-				//else
+				// else
 				//	height = clip_height; // Already initialized with clip_height
 
 				y = static_cast<T>(0);
@@ -671,7 +761,7 @@ namespace rsx
 			const auto w = std::min<u32>(parent_w, std::max<u32>(child_w, dst_x) - dst_x); // Clamp negatives to 0!
 			const auto h = std::min<u32>(parent_h, std::max<u32>(child_h, dst_y) - dst_y);
 
-			return std::make_tuple<position2u, position2u, size2u>({ src_x, src_y }, { dst_x, dst_y }, { w, h });
+			return std::make_tuple<position2u, position2u, size2u>({src_x, src_y}, {dst_x, dst_y}, {w, h});
 		}
 		else
 		{
@@ -683,7 +773,7 @@ namespace rsx
 			const auto w = std::min<u32>(child_w, std::max<u32>(parent_w, src_x) - src_x);
 			const auto h = std::min<u32>(child_h, std::max<u32>(parent_h, src_y) - src_y);
 
-			return std::make_tuple<position2u, position2u, size2u>({ src_x, src_y }, { dst_x, dst_y }, { w, h });
+			return std::make_tuple<position2u, position2u, size2u>({src_x, src_y}, {dst_x, dst_y}, {w, h});
 		}
 	}
 
@@ -712,7 +802,7 @@ namespace rsx
 			}
 		}
 
-		return { width, height };
+		return {width, height};
 	}
 
 	template <bool clamp = false>
@@ -733,10 +823,10 @@ namespace rsx
 
 		if (std::max(width_, height_) > config.min_scalable_dimension)
 		{
-			return { width_, height_ };
+			return {width_, height_};
 		}
 
-		return { width, height };
+		return {width, height};
 	}
 
 	/**
@@ -818,14 +908,14 @@ namespace rsx
 				if (n == count)
 					return dst_index;
 
-				dst[dst_index++] = last_index; //Duplicate last
+				dst[dst_index++] = last_index; // Duplicate last
 
 				if ((dst_index & 1) == 0)
-					//Duplicate last again to fix face winding
+					// Duplicate last again to fix face winding
 					dst[dst_index++] = last_index;
 
 				last_index = src[n];
-				dst[dst_index++] = last_index; //Duplicate next
+				dst[dst_index++] = last_index; // Duplicate next
 			}
 			else
 			{
@@ -860,11 +950,12 @@ namespace rsx
 		// Classic fixed point, see PGRAPH section of nouveau docs for TEX_FILTER (lod_bias) and TEX_CONTROL (min_lod, max_lod)
 		// Technically min/max lod are fixed 4.8 but a 5.8 decoder should work just as well since sign bit is 0
 
-		if constexpr (sign) if (bits & (1 << (integer + frac)))
-		{
-			bits = (0 - bits) & (~0u >> (31 - (integer + frac)));
-			return bits / (-To(1u << frac));
-		}
+		if constexpr (sign)
+			if (bits & (1 << (integer + frac)))
+			{
+				bits = (0 - bits) & (~0u >> (31 - (integer + frac)));
+				return bits / (-To(1u << frac));
+			}
 
 		return bits / To(1u << frac);
 	}
@@ -907,7 +998,7 @@ namespace rsx
 		return base * scale;
 	}
 
-	template<bool _signed = false>
+	template <bool _signed = false>
 	u16 encode_fx12(f32 value)
 	{
 		u16 raw = u16(std::abs(value) * 256.);

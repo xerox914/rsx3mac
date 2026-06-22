@@ -20,8 +20,11 @@ add_library(rpcs3_emu STATIC
     IPC_config.cpp
     IPC_socket.cpp
 )
-# ToyStory 3 :: Disable OpenGL backend (required for macOS ARM64)
+# RSX3MAC :: Disable OpenGL backend (required for macOS ARM64)
 target_compile_definitions(rpcs3_emu PRIVATE WITHOUT_OPENGL)
+target_sources(rpcs3_emu PRIVATE
+    fastlog.cpp
+)
 
 
 if(USE_LTO)
@@ -568,6 +571,7 @@ target_sources(rpcs3_emu PRIVATE
     RSX/rsx_methods.cpp
     RSX/rsx_utils.cpp
     RSX/rsx_vertex_data.cpp
+    RSX/rsx_log_adapter.cpp
 )
 
 if(NOT ANDROID AND NOT APPLE)

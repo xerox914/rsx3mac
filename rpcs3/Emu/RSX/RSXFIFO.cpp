@@ -8,6 +8,9 @@
 #include "Emu/Memory/vm_reservation.h"
 #include "Emu/Cell/lv2/sys_rsx.h"
 #include "NV47/HW/context.h"
+#include "rsx_log_adapter.h"
+#include "Emu/fastlog.h"
+#include "Utilities/Thread.h"
 
 #include "util/asm.hpp"
 
@@ -22,6 +25,9 @@ namespace rsx
 {
 	namespace FIFO
 	{
+	    // Timestamp state for RSX FIFO semantic logging
+	    static u64 last_ts = 0;
+	
 		FIFO_control::FIFO_control(::rsx::thread* pctrl)
 		{
 			m_thread = pctrl;
@@ -641,10 +647,28 @@ namespace rsx
 
 	void thread::run_FIFO()
 	{
+		// ----------------------------------------------------------------------------------
+		// BEGIN DEFINE ## Local timing macro — depends on huge and delta_us
+		// ----------------------------------------------------------------------------------
+		#define fastmax(tag, fmt, ...)                                                   \
+			do {                                                                         \
+				if (huge) {                                                              \
+					fastlog_printf("   %-12s !!MAX!!      ➤ " fmt "\n",                  \
+								   tag, ##__VA_ARGS__);                                  \
+				} else {                                                                 \
+					fastlog_printf("   %-12s +%5.1fµs  ➤ " fmt "\n",                     \
+								   tag, delta_us, ##__VA_ARGS__);                        \
+				}                                                                        \
+			} while (0)
+		// -----------------------------------------------------------------------------------
+		// END DEFINE FASTMAX MACRO
+		// -----------------------------------------------------------------------------------
+		
 		FIFO::register_pair command;
 		fifo_ctrl->read(command);
 		const auto cmd = command.reg;
-
+		static bool inside_frame = false;
+		
 		if (cmd & (0xffff0000 | RSX_METHOD_NON_METHOD_CMD_MASK)) [[unlikely]]
 		{
 			// Check for special FIFO commands
@@ -785,6 +809,8 @@ namespace rsx
 
 		do
 		{
+			const u32 old_ptr = fifo_ctrl->get_pos();
+			
 			if (capture_current_frame) [[unlikely]]
 			{
 				const u32 reg = (command.reg & 0xfffc) >> 2;
@@ -883,7 +909,25 @@ namespace rsx
 
 			const u32 reg = (command.reg & 0xffff) >> 2;
 			const u32 value = command.value;
+			
+			// 🔥 RSX FIFO burst logger — your injection point
+			fastlog::fifo(fifo_ctrl->get_pos(), reg, value);
+			
+			// Grab timestamp
+			u64 now   = fastlog::fastlog_timestamp();
+			u64 delta = (FIFO::last_ts == 0) ? 0 : (now - FIFO::last_ts);
+			FIFO::last_ts = now;
+			
+			// Convert to microseconds
+			double delta_us = double(delta) / 1000.0;
 
+			// Maximum delta clamping
+			constexpr double max_us = 50'000.0; // 50 ms sentinel
+			bool huge = delta_us > max_us;
+			
+			// TESTING THREAD NAME !!
+			fastlog_printf("THREAD.NAME %s", thread_ctrl::get_name().c_str());
+			
 			m_ctx->register_state->decode(reg, value);
 
 			if (auto method = methods[reg])
@@ -900,6 +944,217 @@ namespace rsx
 			{
 				// Something changed, set signal flags if any specified
 				m_graphics_state |= state_signals[reg];
+			}
+			
+			// ⬒ FRAME BEGIN detection ---
+			if (!inside_frame)
+			{
+				// Start of frame: first draw or first render-target bind
+				if (reg == NV4097_SET_COLOR_MASK ||
+					reg == NV4097_SET_DEPTH_MASK ||
+					reg == NV4097_DRAW_ARRAYS ||
+					reg == NV4097_DRAW_INDEX_ARRAY)
+				{
+					fastlog_printf("⬒ {");
+					fastlog_printf("⬒ FRAME %llu BEGIN", static_cast<unsigned long long>(fastlog::fastlog_timestamp())); // or g_frame_index if you want
+					inside_frame = true;
+				}
+			}
+
+			// ORDERING RULE
+			// 1. SURF → 2. STATE → 3. DRAW → 4. SYNC → 5. RSX FALLBACK → 6. FIFO
+			// This ordering mirrors the actual GPU pipeline and FIFO timeline
+
+			// [#1] SURF semantic mapping ---
+			switch (reg)
+			{
+				// SURF.create — surface definition / layout / format
+				case NV4097_SET_SURFACE_FORMAT:
+				case NV4097_SET_SURFACE_PITCH_A:
+				case NV4097_SET_SURFACE_PITCH_B:
+				case NV4097_SET_SURFACE_COLOR_TARGET:
+				case NV4097_SET_SURFACE_ZETA_OFFSET:
+					fastmax("SURF.create", "$%X #%08X", reg, surf_hash(value));
+					break;
+
+				// SURF.bind — binding a surface as a texture
+				case NV4097_SET_TEXTURE_OFFSET:
+				case NV4097_SET_TEXTURE_FORMAT:
+				case NV4097_SET_TEXTURE_CONTROL0:
+				case NV4097_SET_TEXTURE_CONTROL3:
+					fastmax("SURF.bind", "$%X #%08X", reg, surf_hash(value));
+					break;
+
+				// SURF.sample — shader sampling from a surface
+				case NV4097_SET_VERTEX_TEXTURE_OFFSET:
+					fastmax("SURF.sample", "$%X #%08X", reg, surf_hash(value));
+					break;
+
+				// SURF.target — surface becomes a render target
+				case NV4097_SET_COLOR_MASK:
+				case NV4097_SET_DEPTH_MASK:
+					fastmax("SURF.target", "$%X #%08X", reg, surf_hash(value));
+					break;
+
+				default:
+					break;
+			}
+
+			// [#2] STATE semantic mapping ---
+			switch (reg)
+			{
+				// Blend state
+				case NV4097_SET_BLEND_ENABLE:
+				case NV4097_SET_BLEND_FUNC_SFACTOR:
+				case NV4097_SET_BLEND_FUNC_DFACTOR:
+				case NV4097_SET_BLEND_COLOR:
+					fastmax("STATE.blend", "$%X", reg);
+					break;
+
+				// Depth state
+				case NV4097_SET_DEPTH_TEST_ENABLE:
+				case NV4097_SET_DEPTH_FUNC:
+				case NV4097_SET_DEPTH_MASK:
+					fastmax("STATE.depth", "$%X", reg);
+					break;
+
+				// Stencil state
+				case NV4097_SET_STENCIL_TEST_ENABLE:
+				case NV4097_SET_STENCIL_FUNC:
+				case NV4097_SET_STENCIL_OP_FAIL:
+				case NV4097_SET_STENCIL_OP_ZFAIL:
+				case NV4097_SET_STENCIL_OP_ZPASS:
+					fastmax("STATE.stencil", "$%X", reg);
+					break;
+
+				// Viewport / scissor
+				case NV4097_SET_VIEWPORT_HORIZONTAL:
+				case NV4097_SET_VIEWPORT_VERTICAL:
+				case NV4097_SET_SCISSOR_HORIZONTAL:
+				case NV4097_SET_SCISSOR_VERTICAL:
+					fastmax("STATE.viewport", "$%X", reg);
+					break;
+
+				// Shader program bindings
+				case NV4097_SET_SHADER_PROGRAM:
+					fastmax("STATE.shader", "$%X", reg);
+					break;
+
+				// Rasterizer state
+				case NV4097_SET_CULL_FACE:
+				case NV4097_SET_FRONT_FACE:
+					fastmax("STATE.raster", "$%X", reg);
+					break;
+
+				// Clear operations
+				case NV4097_SET_COLOR_CLEAR_VALUE:
+				case NV4097_SET_ZSTENCIL_CLEAR_VALUE:
+				case NV4097_CLEAR_SURFACE:
+					fastmax("STATE.clear", "$%X", reg);
+					break;
+
+				default:
+					break;
+			}
+
+			// [#3] DRAW semantic mapping ---
+			switch (reg)
+			{
+				case NV4097_DRAW_ARRAYS:
+					fastmax("DRAW.array", "$%X", reg);
+					break;
+
+				case NV4097_DRAW_INDEX_ARRAY:
+					fastmax("DRAW.index", "$%X", reg);
+					break;
+
+				case NV4097_INLINE_ARRAY:
+					fastmax("DRAW.inline", "$%X", reg);
+					break;
+					
+				default:
+					break;
+			}
+
+			// [#4] SYNC semantic mapping ---
+			switch (reg)
+			{
+				// ZCULL sync
+				case NV4097_SET_ZCULL_CONTROL0:
+				case NV4097_SET_ZCULL_CONTROL1:
+				case NV4097_SET_ZCULL_STATS_ENABLE:
+					fastmax("SYNC.zcull", "$%X", reg);
+					break;
+					
+				// Rasterizer / pipeline sync
+				case NV4097_INVALIDATE_VERTEX_CACHE_FILE:
+				case NV4097_INVALIDATE_VERTEX_FILE:
+					fastmax("SYNC.raster", "$%X", reg);
+					break;
+				
+				// Memory sync (CPU–GPU + global visibility)
+				case NV406E_SET_REFERENCE:
+				case NV406E_SEMAPHORE_OFFSET:
+				case NV406E_SEMAPHORE_ACQUIRE:
+				case NV406E_SEMAPHORE_RELEASE:
+				case NV4097_INVALIDATE_L2:
+					fastmax("SYNC.mem", "$%X", reg);
+					break;
+
+				// Fence sync (GPU write completion)
+				case NV4097_BACK_END_WRITE_SEMAPHORE_RELEASE:
+				case NV4097_TEXTURE_READ_SEMAPHORE_RELEASE:
+					fastmax("SYNC.fence", "$%X", reg);
+					break;
+
+				// Command buffer sync
+				case NV4097_WAIT_FOR_IDLE:
+					fastmax("SYNC.cmd", "$%X", reg);
+					break;
+
+				default:
+					break;
+			}
+			
+			// ⬒ FRAME END detection ---
+			if (inside_frame)
+			{
+				if (reg == NV4097_WAIT_FOR_IDLE ||
+					reg == NV406E_SEMAPHORE_RELEASE ||
+					reg == NV406E_SEMAPHORE_ACQUIRE)
+				{
+					fastlog_printf("} ⬒");
+					inside_frame = false;
+					
+					// 🔥 Frame boundary detected
+					fastlog::next_frame();
+				}
+			}
+
+			// [#5] RSX FALLBACK semantic classification ---
+			const char* tag = rsx::classify_method(reg);
+			fastmax("%s", "$%X", tag, reg);
+
+			// [#6] FIFO pointer tracking (fastlog)
+			const u32 new_ptr = fifo_ctrl->get_pos();
+
+			if (new_ptr == old_ptr)
+			{
+				fastlog::fifo_ptr_stall(old_ptr);
+			}
+			else if (new_ptr < old_ptr)
+			{
+				fastlog::fifo_ptr_wrap(old_ptr, new_ptr);
+			}
+			else
+			{
+				fastlog::fifo_ptr_step(old_ptr, new_ptr);
+			}
+			
+			// FIFO empty?
+			if (new_ptr == fifo_ctrl->read_put())
+			{
+				fastlog::fifo_ptr_empty(new_ptr);
 			}
 		}
 		while (fifo_ctrl->read_unsafe(command));
