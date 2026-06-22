@@ -1,5 +1,4 @@
 #pragma once // No BOM and only basic ASCII in this header, or a neko will die
-#include "silence_all_logging.h"  // DEBUG MODE RSX3MAC
 #include "util/types.hpp"         // IWYU pragma: export
 #include "util/atomic.hpp"        // IWYU pragma: export
 #include "util/endian.hpp"        // IWYU pragma: export

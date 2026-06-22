@@ -413,7 +413,7 @@ extern void dump_executable(std::span<const u8> data, const ppu_module<lv2_obj>*
 void Emulator::Init()
 {
 	// RSX3MAC INIT LOGGING
-	fastlog::fastlog_bootstrap();
+	/// DO NOT ENABLE NOW fastlog::fastlog_bootstrap();
 	
 	// Log LLVM version
 	if (static bool logged_llvm = false; !logged_llvm)
